@@ -1,19 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { SiteConfig, Slot, Theme } from '@/lib/schema';
-import { SLOT_RULES } from '@/lib/slots';
-import { CATALOG } from '@/lib/catalog';
+import type { Block, SiteConfig, Theme } from '@/lib/schema';
+import { COLS, orderedIds, type Rect } from '@/lib/grid';
+import { lookOf } from '@/lib/catalog';
 import { renderBlock, type BlockData, type Mode } from './blocks';
 
 export type { BlockData, Mode };
-
-// 편집기 전용 장식·콜백. 렌더러는 상태를 갖지 않고(R6) 여기서 받은 것만 쓴다.
-export interface EditChrome {
-  selectedBlockId: string | null;
-  selectedSlot: Slot | null;
-  onSelectBlock: (id: string, slot: Slot) => void;
-  onSelectSlot: (slot: Slot) => void;
-  toolbar: (id: string, slot: Slot) => ReactNode;
-}
 
 const FONT_STACK: Record<Theme['font'], string> = {
   pretendard: '"Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
@@ -27,93 +18,77 @@ export function themeStyle(theme: Theme): CSSProperties {
   return { '--accent': theme.accent, '--s': SCALE[theme.scale], fontFamily: FONT_STACK[theme.font] } as CSSProperties;
 }
 
-const cx = (...xs: Array<string | false | null | undefined>) => xs.filter(Boolean).join(' ');
+export const cx = (...xs: Array<string | false | null | undefined>) => xs.filter(Boolean).join(' ');
+
+// 칸 직사각형 → 판(CSS Grid) 위 자리. 편집기 장식도 같은 자리에 겹친다
+export const gridPlace = (r: Rect): CSSProperties => ({ gridColumn: `${r.x + 1} / span ${r.w}`, gridRow: `${r.y + 1} / span ${r.h}` });
 
 interface RenderProps {
   config: SiteConfig;
   data: BlockData;
   mode: Mode;
-  edit?: EditChrome;
+  overlay?: ReactNode; // 편집기 장식(선택 테두리·툴바 등). 판의 같은 칸 위에 겹친다. 렌더러는 내용을 모른다 (R6)
 }
 
-// (config, data, mode) → UI. 편집기와 공개 페이지가 같이 쓴다 (R1).
-export function SiteRenderer({ config, data, mode, edit }: RenderProps) {
-  const common = { config, data, mode, edit: mode === 'edit' ? edit : undefined };
+// (config, data, mode) → UI. 편집기와 공개 페이지가 같이 쓴다 (R1·R9).
+// 판은 48칸 CSS Grid(globals.css .board). 블록 DOM 순서는 (y, x, id)라 모바일 세로 쌓기와 읽기 순서가 맞는다.
+export function SiteRenderer({ config, data, mode, overlay }: RenderProps) {
   return (
-    <div className="site min-h-full bg-neutral-50 text-neutral-900" style={themeStyle(config.theme)}>
-      <SlotArea slot="header" {...common} />
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 md:grid-cols-3">
-        <SlotArea slot="main-left" {...common} className="md:col-span-1" />
-        <SlotArea slot="main-right" {...common} className="md:col-span-2" />
-      </div>
-      <div className="mx-auto max-w-5xl px-4 pb-8">
-        <SlotArea slot="footer" {...common} />
+    <div
+      className={cx('site @container min-h-full bg-neutral-50 text-neutral-900', mode === 'public' && 'overflow-x-clip')}
+      style={themeStyle(config.theme)}
+    >
+      <div className="board" data-mode={mode}>
+        {orderedIds(config.layout).map((id) => {
+          const block = config.blocks[id];
+          if (!block) return null;
+          return (
+            <BlockFrame key={id} id={id} block={block} rect={config.layout[id]}>
+              {renderBlock(id, block, data, { theme: config.theme, mode, site: { title: config.title } })}
+            </BlockFrame>
+          );
+        })}
+        {overlay}
       </div>
     </div>
   );
 }
 
-function SlotArea({ slot, config, data, mode, edit, className }: RenderProps & { slot: Slot; className?: string }) {
-  const ids = config.slots[slot];
-  const frames = ids.map((id) => <BlockFrame key={id} id={id} slot={slot} config={config} data={data} mode={mode} edit={edit} />);
-  if (!edit) return <div className={cx(className, 'flex flex-col gap-6')}>{frames}</div>;
+const FRAME = {
+  card: 'border border-neutral-200 bg-white [--bw:1px]',
+  plain: '',
+  fill: 'bg-(--accent) text-white',
+} as const;
+const PAD = ['p-0', 'p-2', 'p-5', 'p-8'] as const; // 0 / 8 / 20 / 32px. 글자 크기 배율은 적용하지 않는다
+const VALIGN = { top: 'justify-start', middle: 'justify-center', bottom: 'justify-end' } as const;
 
-  const selected = edit.selectedSlot === slot && !edit.selectedBlockId;
+// 탭 메뉴 앵커용 id: 제목이 있으면 제목, 프로필은 "소개", 논문은 "논문"
+const anchorOf = (block: Block) =>
+  'heading' in block.props ? block.props.heading : block.type === 'profile' ? '소개' : block.type === 'publications' ? '논문' : undefined;
+
+// 블록 상자: 자기 칸 영역을 꽉 채우고(stretch) 내용은 valign에 따라 놓는다 (5.2). 안쪽 반응은 블록 폭 기준(@container)
+function BlockFrame({ id, block, rect, children }: { id: string; block: Block; rect: Rect; children: ReactNode }) {
+  const look = lookOf(block);
+  // bleed: 그쪽 벽에 닿아 있고 바탕이 있을 때만 바탕을 화면 끝까지 잇는다 (7.1, globals.css .bleed-*)
+  const left = look.frame !== 'plain' && rect.x === 0 && (look.bleed === 'left' || look.bleed === 'both');
+  const right = look.frame !== 'plain' && rect.x + rect.w === COLS && (look.bleed === 'right' || look.bleed === 'both');
+  const round = look.corner === 'round';
   return (
     <div
+      id={anchorOf(block)}
+      data-block-id={id}
       className={cx(
-        className,
-        'relative flex flex-col gap-4 rounded-lg p-2 pt-4 outline-1 outline-dashed',
-        selected ? 'bg-white/60 outline-(--accent)' : 'outline-neutral-300',
+        '@container relative flex min-w-0 flex-col',
+        FRAME[look.frame],
+        PAD[look.pad],
+        VALIGN[look.valign],
+        round && 'rounded-xl',
+        left && 'bleed-l rounded-l-none border-l-0',
+        right && 'bleed-r rounded-r-none border-r-0',
       )}
-      onClick={() => edit.onSelectSlot(slot)}
+      style={gridPlace(rect)}
     >
-      <span className="absolute -top-2 left-3 rounded bg-white px-1 text-[10px] text-neutral-400">{SLOT_RULES[slot].label}</span>
-      {frames}
-      {ids.length === 0 && (
-        <button
-          type="button"
-          className="rounded-md border border-dashed border-neutral-300 py-6 text-sm text-neutral-400 hover:border-(--accent) hover:text-(--accent)"
-        >
-          + 블록 고르기
-        </button>
-      )}
-    </div>
-  );
-}
-
-function BlockFrame({ id, slot, config, data, mode, edit }: RenderProps & { id: string; slot: Slot }) {
-  const block = config.blocks[id];
-  if (!block) return null;
-  // 탭 메뉴 앵커용 id: 제목이 있으면 제목, 프로필은 "소개", 논문은 "논문"
-  const anchor =
-    'heading' in block.props ? block.props.heading : block.type === 'profile' ? '소개' : block.type === 'publications' ? '논문' : undefined;
-  const content = renderBlock(id, block, data, { theme: config.theme, mode, site: { title: config.title } });
-  if (!edit) return <div id={anchor}>{content}</div>;
-
-  const selected = edit.selectedBlockId === id;
-  const feature = 'feature' in block ? block.feature : undefined;
-  return (
-    <div
-      id={anchor}
-      className={cx('relative rounded-xl', selected ? 'outline-2 outline-(--accent)' : 'hover:outline-1 hover:outline-neutral-300')}
-      onClick={(e) => {
-        e.stopPropagation();
-        edit.onSelectBlock(id, slot);
-      }}
-    >
-      {selected && (
-        <div className="absolute -top-9 left-0 z-10" onClick={(e) => e.stopPropagation()}>
-          {edit.toolbar(id, slot)}
-        </div>
-      )}
-      {content}
-      {feature && !feature.connected && (
-        <div className="mt-1 flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
-          <span>{CATALOG[block.type].feature?.label} 기능이 아직 연결되지 않았어요</span>
-          <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium">기능 연결 (유료)</span>
-        </div>
-      )}
+      {children}
     </div>
   );
 }

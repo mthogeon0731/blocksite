@@ -27,6 +27,8 @@ npm run dev
 
 ## 데모 순서 (심사 시연, 3분 — SPEC 10절)
 
+> `grid-layout` 브랜치: 아래 순서는 그리드 개편 전 기준이다. 4단계에서 [GRID_SPEC.md](GRID_SPEC.md) 11.4로 바꾼다.
+
 `.data/`를 지우고 서버를 켠 뒤 http://localhost:3000/editor/demo 에서 시작한다.
 
 1. **빈 사이트** → 왼쪽 "블록 고르기"에서 **탭 메뉴**, **프로필** 클릭 → 상단·왼쪽 자리에 들어감 → 오른쪽 "블록" 탭에서 이름·소속 입력 → 미리보기가 글자 단위로 바뀐다.
@@ -49,7 +51,9 @@ npm run dev
 - [x] `src/`에 AI API 호출 0건 (`grep -rniE "openai|anthropic|gemini|claude|gpt|llm" src/` → 없음)
 - [x] README에 실행 방법과 데모 순서
 
-서버 검증 점검(서버 켜고): `node scripts/check-rules.mjs` — 규칙표·스키마 9건, 연결·공지 11건, 사진 13건 = 33건. 점검용 사이트 `site_check`만 쓰고 시드 사이트는 건드리지 않는다. Supabase 모드에서도 같은 스크립트로 확인한다.
+서버 검증 점검(서버 켜고): `node scripts/check-rules.mjs` — 판 규칙·스키마 16건, 연결·공지 11건, 사진 13건, v1 → v2 변환 2건 = 42건. 점검용 사이트 `site_check`만 쓰고 시드 사이트는 건드리지 않는다. Supabase 모드에서는 site_check를 v2로 쓰므로 그 DB를 읽는 배포본이 v2 코드일 때만 돌린다.
+
+판 규칙 단위 확인(서버 불필요): `node --test scripts/grid.test.mjs` — resolve(밀어내기)·빈 줄 정리·빈 자리 찾기·v1 변환 7건.
 
 ## 배포 (Vercel + Supabase)
 
@@ -65,9 +69,10 @@ npm run dev
 ## 구조
 
 ```
-src/lib/schema.ts         zod: SiteConfig·블록 종류별 props·공지 입력
-src/lib/slots.ts          슬롯 규칙표 + canPlace + validateConfig
-src/lib/catalog.ts        블록 6종 정의(이름·설명·기능) + newBlock
+src/lib/schema.ts         zod: SiteConfig v2(layout·look·theme.background)·블록 종류별 props·공지 입력 + parseSiteConfig
+src/lib/grid.ts           판 규칙(48칸): resolve(밀어내기)·findFreeSpot·clampRect·liftUp·collapseEmptyRows·validateConfig
+src/lib/migrate.ts        v1(자리 4개) → v2 변환. 저장소가 읽을 때 쓴다
+src/lib/catalog.ts        블록 6종 정의(이름·설명·기능·기본/최소 크기·기본 look·부품) + newBlock + lookOf
 src/lib/sample.ts         연결 전 샘플 데이터
 src/lib/seed.ts           시드 사이트, 빈 사이트
 src/lib/store.ts          저장소 인터페이스
@@ -83,7 +88,8 @@ src/app/api/sites/[id]    GET/PUT config, connect/ POST 기능 연결
 src/app/api/notices       GET/POST, [id]/ DELETE
 src/app/api/photos        GET/POST(multipart), [id]/ DELETE
 src/app/uploads/[...path] 로컬 업로드 파일 서빙 (Supabase 모드에서는 안 쓴다)
-scripts/check-rules.mjs   서버 검증 점검 33건
+scripts/check-rules.mjs   서버 검증 점검 42건
+scripts/grid.test.mjs     판 규칙 단위 확인 7건 (node --test)
 supabase/                 마이그레이션·시드 SQL
 legacy/                   교수님 홈페이지 정적 미리보기 (참고용, 빌드 제외)
 ```
@@ -91,9 +97,9 @@ legacy/                   교수님 홈페이지 정적 미리보기 (참고용,
 ## 설계 규칙 (SPEC 3절, 코드에서 지키는 곳)
 
 - 사이트의 진실은 config JSON 하나 (`schema.ts`), 편집기와 공개 페이지가 같은 `SiteRenderer`를 쓴다.
-- 블록 id는 nanoid 8자로 생성 시 발급, 절대 안 바뀜 (`store/editor.ts addBlock`). 위치는 `slots` 배열에만 있다.
+- 블록 id는 nanoid 8자로 생성 시 발급, 절대 안 바뀜 (`store/editor.ts addBlock`). 위치는 `layout[블록 id]`(칸 단위 x·y·w·h)에만 있다.
 - 공지·사진은 `site_id + block_id`로만 묶인다. 테이블에 위치 정보 없음 (`db.local.ts`, `db.supabase.ts`, `0001_init.sql`).
-- 슬롯 규칙표는 UI(`BlockPicker`, 툴바)와 서버(`PUT /api/sites`)가 같은 `slots.ts`를 쓴다.
+- 판 규칙(겹침 금지·최소 크기·사이트당 1개·30개)은 UI(`BlockPicker`, 편집기 스토어)와 서버(`PUT /api/sites`)가 같은 `grid.ts`를 쓴다. 판은 CSS Grid라 블록이 겹쳐 그려지지 않는다.
 - 스타일은 사이트 단위 `theme`만. `--accent`, `--s` CSS 변수로 적용 (`SiteRenderer.themeStyle`, `globals.css`).
 - 렌더러는 순수: 데이터는 바깥(`loadBlockData`)에서 넣어 준다.
 - 기능 연결 상태는 `POST /connect`로만 바뀐다. PUT이 보낸 값은 서버가 무시한다.

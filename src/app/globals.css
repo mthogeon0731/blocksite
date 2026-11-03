@@ -19,6 +19,64 @@
   font-size: var(--text-base);
 }
 
+/* GRID_SPEC 5.2 판: 가로 48칸 CSS Grid, gap 0(블록 사이 간격은 빈 칸). 블록 배치에 절대 위치를 쓰지 않는다(R10).
+   내용이 칸보다 길면 그 행이 늘어나 아래 블록이 밀리므로, 어떤 화면 폭에서도 겹쳐 그려지지 않는다.
+   --cell을 <length>로 등록해 .board에서 px로 계산된 값이 블록 안(@container)까지 그대로 내려가게 한다. */
+@property --cell {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 24px;
+}
+.board {
+  --cell: min(24px, 100cqw / 48); /* 공개 페이지: 폭 1152px 이상이면 24px, 좁으면 칸이 비례해 준다 */
+  display: grid;
+  grid-template-columns: repeat(48, var(--cell));
+  grid-auto-rows: minmax(var(--cell), auto);
+  width: fit-content;
+  margin-inline: auto;
+  padding-bottom: var(--cell);
+}
+.board[data-mode="edit"] {
+  --cell: 24px; /* 편집기: 24px 고정, 미리보기 영역에 맞게 transform으로 축소한다 (5.3) */
+}
+/* 8절 모바일: 판 바깥 상자(.site) 폭 < 768px이면 x·w를 무시하고 DOM 순서((y, x, id))대로 한 줄로 쌓는다.
+   화면 폭이 아니라 컨테이너 기준이라 편집기 안의 좁은 미리보기에서도 같은 렌더러가 모바일로 그려진다. */
+@container (width < 768px) {
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: auto;
+    padding: 0 16px 16px; /* 위는 데스크톱처럼 판 맨 위(y = 0)부터 */
+  }
+}
+
+/* 블록 bleed (7.1): 바탕을 그쪽 화면 끝까지 잇는다. 내용 위치는 그대로. card면 위아래 테두리도 잇는다(--bw) */
+.bleed-l::before,
+.bleed-r::after {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--bw, 0px));
+  bottom: calc(-1 * var(--bw, 0px));
+  width: 100vmax;
+  background: inherit;
+  border-block: inherit;
+}
+.bleed-l::before {
+  right: 100%;
+}
+.bleed-r::after {
+  left: 100%;
+}
+
+/* 편집기 장식 (편집기 쪽 스타일. 렌더러는 모른다) */
+.editor-stage [data-block-id] {
+  cursor: pointer;
+}
+.editor-stage [data-block-id]:hover {
+  outline: 1px solid var(--color-neutral-300);
+}
+
 dialog::backdrop {
   background: rgb(0 0 0 / 0.4);
 }

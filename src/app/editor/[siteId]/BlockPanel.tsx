@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { CATALOG } from '@/lib/catalog';
+import { COLS, MAX_ROWS } from '@/lib/grid';
 import type { Block, Notice, Photo, PropsOf } from '@/lib/schema';
 import { useEditor } from '@/store/editor';
 import { PayModal } from './PayModal';
@@ -29,6 +30,8 @@ export function BlockPanel() {
         </div>
       </div>
 
+      <RectForm id={id} />
+
       <PropsForm key={id} id={id} block={block} />
 
       {'feature' in block &&
@@ -55,6 +58,56 @@ export function BlockPanel() {
 
       {paying === id && <PayModal blockId={id} onClose={() => setPaying(null)} />}
     </div>
+  );
+}
+
+// ---------- 위치·크기 (칸) ----------
+
+const RECT_FIELDS = [
+  ['x', '가로 위치'],
+  ['y', '세로 위치'],
+  ['w', '너비'],
+  ['h', '높이'],
+] as const;
+
+// 숫자 입력·± 버튼 → 칸에 맞추고 겹친 블록은 아래로 민다 (store.setRect). 범위 밖은 clamp
+function RectForm({ id }: { id: string }) {
+  const rect = useEditor((s) => s.config.layout[id]);
+  const setRect = useEditor((s) => s.setRect);
+  if (!rect) return null;
+  // 너비·높이를 바꿀 때는 위치를 지키고 판 끝까지만 늘린다
+  const set = (k: (typeof RECT_FIELDS)[number][0], v: number) =>
+    setRect(id, { ...rect, [k]: k === 'w' ? Math.min(v, COLS - rect.x) : k === 'h' ? Math.min(v, MAX_ROWS - rect.y) : v });
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-medium text-neutral-600">위치·크기 (칸)</h3>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        {RECT_FIELDS.map(([k, label]) => (
+          <div key={k}>
+            <span className="mb-0.5 block text-[11px] text-neutral-500">
+              {label} <span className="text-neutral-400">{k}</span>
+            </span>
+            <div className="flex overflow-hidden rounded-md border border-neutral-200">
+              <button type="button" aria-label={`${label} 줄이기`} onClick={() => set(k, rect[k] - 1)} className="px-2 text-neutral-500 hover:bg-neutral-50">
+                −
+              </button>
+              <input
+                type="number"
+                aria-label={label}
+                value={rect[k]}
+                onChange={(e) => {
+                  if (!Number.isNaN(e.target.valueAsNumber)) set(k, e.target.valueAsNumber);
+                }}
+                className="w-full min-w-0 border-x border-neutral-200 px-1 py-1 text-center text-sm focus:outline-none"
+              />
+              <button type="button" aria-label={`${label} 늘리기`} onClick={() => set(k, rect[k] + 1)} className="px-2 text-neutral-500 hover:bg-neutral-50">
+                +
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

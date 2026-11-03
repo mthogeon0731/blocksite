@@ -1,19 +1,24 @@
--- 11절 시드. src/lib/seed.ts의 SEED_SITE와 같은 내용을 유지할 것.
+-- 11절 시드 (config v2, GRID_SPEC 4절). src/lib/seed.ts의 SEED_SITE와 같은 내용을 유지할 것.
+-- ⚠ v2다. master(v1 코드)가 읽는 DB에서 실행하면 그 배포본의 공개 페이지가 깨진다. grid-layout 코드를 배포하는 DB에서만 실행한다.
+-- 기존 v1 행은 SQL로 바꾸지 않는다: 읽을 때 v2로 변환되고 첫 저장 때 v2로 덮인다.
 insert into sites (id, slug, config) values (
   'site_kimlab',
   'kim-lab',
   $json$
   {
-    "version": 1,
+    "version": 2,
     "siteId": "site_kimlab",
     "slug": "kim-lab",
     "title": "김OO 연구실",
-    "theme": { "accent": "#1E3A8A", "font": "pretendard", "scale": "md" },
-    "slots": {
-      "header": ["a1b2c3d4"],
-      "main-left": ["e5f6g7h8", "i9j0k1l2"],
-      "main-right": ["u1v2w3x4", "m3n4o5p6", "q7r8s9t0"],
-      "footer": ["y5z6a7b8"]
+    "theme": { "accent": "#1E3A8A", "font": "pretendard", "scale": "md", "background": "plain" },
+    "layout": {
+      "a1b2c3d4": { "x": 0, "y": 0, "w": 48, "h": 3 },
+      "e5f6g7h8": { "x": 2, "y": 4, "w": 14, "h": 24 },
+      "i9j0k1l2": { "x": 2, "y": 29, "w": 14, "h": 9 },
+      "u1v2w3x4": { "x": 18, "y": 4, "w": 28, "h": 12 },
+      "m3n4o5p6": { "x": 18, "y": 17, "w": 28, "h": 13 },
+      "q7r8s9t0": { "x": 18, "y": 31, "w": 28, "h": 11 },
+      "y5z6a7b8": { "x": 2, "y": 43, "w": 44, "h": 6 }
     },
     "blocks": {
       "a1b2c3d4": { "type": "nav", "props": { "items": ["소개", "연구", "논문", "연락처"] } },

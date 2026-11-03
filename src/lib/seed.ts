@@ -1,17 +1,21 @@
 import type { SiteConfig } from './schema';
 
 // 11절 시드. 가상 데이터만 쓴다. supabase/seed.sql과 같은 내용을 유지할 것.
+// 배치는 v1 시드를 GRID_SPEC 4.1 규칙으로 옮긴 것, 높이는 브라우저에서 내용을 재서 정했다.
 export const SEED_SITE: SiteConfig = {
-  version: 1,
+  version: 2,
   siteId: 'site_kimlab',
   slug: 'kim-lab',
   title: '김OO 연구실',
-  theme: { accent: '#1E3A8A', font: 'pretendard', scale: 'md' },
-  slots: {
-    header: ['a1b2c3d4'],
-    'main-left': ['e5f6g7h8', 'i9j0k1l2'],
-    'main-right': ['u1v2w3x4', 'm3n4o5p6', 'q7r8s9t0'],
-    footer: ['y5z6a7b8'],
+  theme: { accent: '#1E3A8A', font: 'pretendard', scale: 'md', background: 'plain' },
+  layout: {
+    a1b2c3d4: { x: 0, y: 0, w: 48, h: 3 },
+    e5f6g7h8: { x: 2, y: 4, w: 14, h: 24 },
+    i9j0k1l2: { x: 2, y: 29, w: 14, h: 9 },
+    u1v2w3x4: { x: 18, y: 4, w: 28, h: 12 },
+    m3n4o5p6: { x: 18, y: 17, w: 28, h: 13 },
+    q7r8s9t0: { x: 18, y: 31, w: 28, h: 11 },
+    y5z6a7b8: { x: 2, y: 43, w: 44, h: 6 },
   },
   blocks: {
     a1b2c3d4: { type: 'nav', props: { items: ['소개', '연구', '논문', '연락처'] } },
@@ -54,12 +58,12 @@ export const SEED_SITE: SiteConfig = {
 // 존재하지 않는 siteId로 편집기를 열면 이 빈 사이트로 시작한다 (데모 1번: 빈 사이트).
 export function emptyConfig(siteId: string): SiteConfig {
   return {
-    version: 1,
+    version: 2,
     siteId,
     slug: siteId.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
     title: '새 홈페이지',
-    theme: { accent: '#1E3A8A', font: 'pretendard', scale: 'md' },
-    slots: { header: [], 'main-left': [], 'main-right': [], footer: [] },
+    theme: { accent: '#1E3A8A', font: 'pretendard', scale: 'md', background: 'plain' },
+    layout: {},
     blocks: {},
   };
 }

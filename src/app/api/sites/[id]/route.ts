@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireEditor } from '@/lib/auth';
 import { getSite, getSiteBySlug, putSite } from '@/lib/db';
 import { SiteConfigSchema } from '@/lib/schema';
-import { validateConfig } from '@/lib/slots';
+import { validateConfig } from '@/lib/grid';
 
 type Ctx = { params: Promise<{ id: string }> };
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
@@ -19,7 +19,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
 
   const { id } = await params;
   const body: unknown = await req.json().catch(() => null);
-  const parsed = SiteConfigSchema.safeParse(body);
+  const parsed = SiteConfigSchema.safeParse(body); // v2만 받는다 (v1 변환은 저장소 읽기에서만)
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     return bad(`설정 형식이 올바르지 않아요: ${issue.path.join('.')} ${issue.message}`.trim());
@@ -27,7 +27,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const config = parsed.data;
   if (config.siteId !== id) return bad('주소의 사이트 id와 내용의 siteId가 달라요');
 
-  const why = validateConfig(config); // R4: 규칙표 위반은 서버에서도 거부
+  const why = validateConfig(config); // R4′: 판 규칙(겹침·최소 크기·싱글턴·개수·키 일치) 위반은 서버에서도 거부
   if (why) return bad(why);
 
   const sameSlug = await getSiteBySlug(config.slug);

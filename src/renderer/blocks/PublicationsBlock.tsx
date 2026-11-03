@@ -3,12 +3,16 @@ import type { BlockProps } from './index';
 
 export function PublicationsBlock({ props }: BlockProps<PropsOf<'publications'>>) {
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white p-5">
-      <h2 className="text-lg font-bold">논문</h2>
+    <section>
+      <h2 data-part="heading" className="text-lg font-bold">
+        논문
+      </h2>
       {props.items.length === 0 ? (
-        <p className="mt-2 text-sm text-neutral-400">아직 논문이 없어요</p>
+        <p data-part="list" className="mt-2 text-sm text-neutral-400">
+          아직 논문이 없어요
+        </p>
       ) : (
-        <ol className="mt-2 divide-y divide-neutral-100">
+        <ol data-part="list" className="mt-2 divide-y divide-neutral-100">
           {props.items.map((p, i) => (
             <li key={i} className="flex gap-4 py-3">
               <span className="w-12 shrink-0 pt-0.5 text-sm font-semibold text-(--accent)">{p.year}</span>

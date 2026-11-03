@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import type { BlockData, SiteConfig, Slot } from '@/lib/schema';
-import { SLOTS } from '@/lib/schema';
-import { SLOT_RULES, canPlace } from '@/lib/slots';
-import { SiteRenderer } from '@/renderer/SiteRenderer';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import type { BlockData, SiteConfig } from '@/lib/schema';
+import { BASE_W } from '@/lib/grid';
+import { CATALOG, lookOf } from '@/lib/catalog';
+import { SiteRenderer, cx, gridPlace } from '@/renderer/SiteRenderer';
 import { createEditorStore, EditorStoreContext, useEditor, useEditorStore, type EditorStore } from '@/store/editor';
 import { BlockPicker } from './BlockPicker';
 import { SidePanel } from './SidePanel';
@@ -138,47 +138,91 @@ function SaveStatus() {
   }
 }
 
+// 요소 크기 (ResizeObserver, transform 전 값). 상태는 관찰 콜백에서만 바꾼다
+function useSize(ref: RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setSize({ width: entry.contentRect.width, height: entry.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
+
+// GRID_SPEC 5.3: 판을 기준 폭 1152px(칸 24px)로 그리고 미리보기 영역에 맞게 축소한다(k ≤ 1).
+// 공개 페이지와 같은 폭이라 줄바꿈이 같다(R9). 바깥 상자는 축소된 크기로 잡아 스크롤 길이를 맞춘다.
 function Preview() {
   const config = useEditor((s) => s.config);
   const data = useEditor((s) => s.data);
-  const selectedBlockId = useEditor((s) => s.selectedBlockId);
-  const selectedSlot = useEditor((s) => s.selectedSlot);
   const selectBlock = useEditor((s) => s.selectBlock);
-  const selectSlot = useEditor((s) => s.selectSlot);
+  const areaRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const area = useSize(areaRef);
+  const stage = useSize(stageRef);
+  const k = Math.min(1, area.width / BASE_W);
   return (
-    <main className="min-w-0 flex-1 overflow-auto p-6 pt-12">
-      <div className="mx-auto max-w-5xl rounded-xl bg-neutral-50 shadow-sm ring-1 ring-neutral-200">
-        <SiteRenderer
-          config={config}
-          data={data}
-          mode="edit"
-          edit={{
-            selectedBlockId,
-            selectedSlot,
-            onSelectBlock: selectBlock,
-            onSelectSlot: selectSlot,
-            toolbar: (id, slot) => <Toolbar id={id} slot={slot} />,
+    <main ref={areaRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6 pt-12">
+      <div className="mx-auto" style={{ width: BASE_W * k, height: stage.height * k, visibility: k ? undefined : 'hidden' }}>
+        <div
+          ref={stageRef}
+          className="editor-stage origin-top-left"
+          style={{ width: BASE_W, transform: `scale(${k})` }}
+          onClick={(e) => {
+            const target = e.target as Element;
+            if (target.closest('a')) e.preventDefault(); // 편집 중에는 링크를 따라가지 않는다
+            selectBlock(target.closest<HTMLElement>('[data-block-id]')?.dataset.blockId ?? null);
           }}
-        />
+        >
+          <SiteRenderer config={config} data={data} mode="edit" overlay={<Overlay k={k} />} />
+        </div>
       </div>
     </main>
   );
 }
 
+// 편집 장식: 판(CSS Grid)의 같은 칸 위에 겹친다. 행이 늘어나도 블록 영역과 정확히 맞는다.
+// 판은 축소되어 보이므로 툴바·배지는 1/k로 되돌려 원래 글자 크기로 보이게 한다.
+function Overlay({ k }: { k: number }) {
+  const config = useEditor((s) => s.config);
+  const selectedBlockId = useEditor((s) => s.selectedBlockId);
+  const unscale = { transform: `scale(${k ? 1 / k : 1})` };
+  return Object.entries(config.blocks).map(([id, block]) => {
+    const rect = config.layout[id];
+    const feature = 'feature' in block && !block.feature.connected ? CATALOG[block.type].feature : undefined;
+    const selected = id === selectedBlockId;
+    if (!rect || (!selected && !feature)) return null;
+    return (
+      <div
+        key={id}
+        className={cx('pointer-events-none relative z-10', selected && 'outline-2 outline-(--accent)', selected && lookOf(block).corner === 'round' && 'rounded-xl')}
+        style={gridPlace(rect)}
+      >
+        {feature && (
+          <span
+            className="absolute right-2 top-2 origin-top-right whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+            style={unscale}
+          >
+            {feature.label} 연결 전 · 유료
+          </span>
+        )}
+        {selected && (
+          <div className="pointer-events-auto absolute bottom-full left-0 mb-1 origin-bottom-left" style={unscale} onClick={(e) => e.stopPropagation()}>
+            <Toolbar id={id} />
+          </div>
+        )}
+      </div>
+    );
+  });
+}
+
 const tb = 'rounded px-2 py-1 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent';
 
-function Toolbar({ id, slot }: { id: string; slot: Slot }) {
-  const config = useEditor((s) => s.config);
+function Toolbar({ id }: { id: string }) {
   const noticeCount = useEditor((s) => s.data.notices?.[id]?.length ?? 0);
   const photoCount = useEditor((s) => s.data.photos?.[id]?.length ?? 0);
-  const moveBlock = useEditor((s) => s.moveBlock);
-  const moveToSlot = useEditor((s) => s.moveToSlot);
   const removeBlock = useEditor((s) => s.removeBlock);
-  const block = config.blocks[id];
-  if (!block) return null;
-  const ids = config.slots[slot];
-  const index = ids.indexOf(id);
-  const targets = SLOTS.filter((s) => s !== slot && canPlace(config, s, block.type, id).ok);
 
   // 7절 7번: 데이터가 있는 블록은 시제품에서 삭제하지 않는다 (서버도 거부한다)
   const remove = () => {
@@ -192,28 +236,6 @@ function Toolbar({ id, slot }: { id: string; slot: Slot }) {
 
   return (
     <div className="flex items-center gap-0.5 whitespace-nowrap rounded-md border border-neutral-200 bg-white p-1 text-xs text-neutral-700 shadow-sm">
-      <button type="button" className={tb} disabled={index <= 0} onClick={() => moveBlock(id, 'up')}>
-        ▲ 위로
-      </button>
-      <button type="button" className={tb} disabled={index >= ids.length - 1} onClick={() => moveBlock(id, 'down')}>
-        ▼ 아래로
-      </button>
-      <details className="relative">
-        <summary className={`${tb} cursor-pointer select-none`}>다른 자리로 ▾</summary>
-        <ul className="absolute left-0 top-full z-20 mt-1 min-w-36 rounded-md border border-neutral-200 bg-white py-1 shadow-md">
-          {targets.length === 0 ? (
-            <li className="px-3 py-1 text-neutral-400">옮길 수 있는 자리가 없어요</li>
-          ) : (
-            targets.map((s) => (
-              <li key={s}>
-                <button type="button" className="w-full px-3 py-1 text-left hover:bg-neutral-100" onClick={() => moveToSlot(id, s)}>
-                  {SLOT_RULES[s].label} 자리로
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      </details>
       <button type="button" className={`${tb} text-red-600`} onClick={remove}>
         삭제
       </button>

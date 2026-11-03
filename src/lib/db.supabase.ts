@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { BlockData, Notice, NoticeInput, Photo, SiteConfig } from './schema';
+import { parseSiteConfig, type BlockData, type Notice, type NoticeInput, type Photo, type SiteConfig } from './schema';
 import { MIME, type Fail, type PhotoInput, type Store } from './store';
 
 // Supabase(Postgres + Storage) 저장소. 스키마: supabase/migrations/0001_init.sql, 버킷 photos(공개 읽기).
@@ -30,16 +30,17 @@ const toPhoto = ({ id, storage_path, caption }: PhotoRow): Photo => ({
   caption,
 });
 
+// 기존 v1 행은 읽을 때 v2로 바꾸고, 첫 저장 때 v2로 덮인다 (SQL로 일괄 변환하지 않는다, GRID_SPEC 4.1)
 async function getSite(id: string): Promise<SiteConfig | null> {
   const { data, error } = await sb().from('sites').select('config').eq('id', id).maybeSingle();
   if (error) fail(error);
-  return (data?.config as SiteConfig | undefined) ?? null;
+  return data ? parseSiteConfig(data.config) : null;
 }
 
 async function getSiteBySlug(slug: string): Promise<SiteConfig | null> {
   const { data, error } = await sb().from('sites').select('config').eq('slug', slug).maybeSingle();
   if (error) fail(error);
-  return (data?.config as SiteConfig | undefined) ?? null;
+  return data ? parseSiteConfig(data.config) : null;
 }
 
 // 7절 7번: 사라지는 블록에 묶인 공지·사진이 있으면 거부

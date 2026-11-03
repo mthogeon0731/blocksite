@@ -1,9 +1,9 @@
 import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { Block, BlockData, BlockType, Notice, Photo, SiteConfig, Slot, Theme } from '@/lib/schema';
-import { newBlock } from '@/lib/catalog';
-import { canPlace, findSlotOf } from '@/lib/slots';
+import type { Block, BlockData, BlockType, Notice, Photo, SiteConfig, Theme } from '@/lib/schema';
+import { CATALOG, newBlock } from '@/lib/catalog';
+import { COLS, canAdd, clampRect, findFreeSpot, resolve, type Rect } from '@/lib/grid';
 
 export type SaveState =
   | { kind: 'idle' }
@@ -18,17 +18,14 @@ export interface EditorState {
   config: SiteConfig;
   data: BlockData; // 연결된 블록의 공지·사진. blockId 기준이라 블록을 옮겨도 그대로 (R3)
   selectedBlockId: string | null;
-  selectedSlot: Slot | null;
   panelTab: 'style' | 'block';
   saveState: SaveState;
   toast: string | null;
-  selectBlock: (id: string, slot: Slot) => void;
-  selectSlot: (slot: Slot | null) => void;
+  selectBlock: (id: string | null) => void;
   setPanelTab: (tab: 'style' | 'block') => void;
-  addBlock: (type: BlockType, slot: Slot) => string | null; // 실패하면 이유
+  addBlock: (type: BlockType) => string | null; // 실패하면 이유
   removeBlock: (id: string) => void;
-  moveBlock: (id: string, dir: 'up' | 'down') => void;
-  moveToSlot: (id: string, slot: Slot) => string | null; // 실패하면 이유
+  setRect: (id: string, rect: Rect) => void; // 위치·크기만 바뀐다. 블록 id와 데이터는 그대로 (R2′/R3)
   updateProps: (id: string, patch: Partial<Block['props']>) => void;
   connectBlock: (id: string) => void; // 서버가 연결을 확인한 뒤 로컬 상태 반영
   setList: <K extends DataKind>(kind: K, blockId: string, list: ItemOf<K>[]) => void;
@@ -40,9 +37,6 @@ export interface EditorState {
   showToast: (message: string) => void;
 }
 
-const withoutId = (slots: SiteConfig['slots'], id: string) =>
-  Object.fromEntries(Object.entries(slots).map(([k, ids]) => [k, ids.filter((x) => x !== id)])) as SiteConfig['slots'];
-
 const withList = (data: BlockData, kind: DataKind, blockId: string, list: Notice[] | Photo[]): BlockData =>
   ({ ...data, [kind]: { ...data[kind], [blockId]: list } }) as BlockData;
 
@@ -53,28 +47,24 @@ export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
     config: initial,
     data: initialData,
     selectedBlockId: null,
-    selectedSlot: null,
     panelTab: 'style',
     saveState: { kind: 'idle' },
     toast: null,
 
-    selectBlock: (id, slot) => set({ selectedBlockId: id, selectedSlot: slot, panelTab: 'block' }),
-    selectSlot: (slot) => set({ selectedSlot: slot, selectedBlockId: null }),
+    selectBlock: (id) => set(id ? { selectedBlockId: id, panelTab: 'block' } : { selectedBlockId: null }),
     setPanelTab: (panelTab) => set({ panelTab }),
 
-    addBlock: (type, slot) => {
+    // 카드만 클릭(GRID_SPEC 6.6-4): 기본 크기로 빈 자리 자동. 탭 메뉴는 맨 위 가로 꽉, 나머지는 아래로 민다
+    addBlock: (type) => {
       const { config } = get();
-      const check = canPlace(config, slot, type);
-      if (!check.ok) return check.reason;
+      const why = canAdd(config, type);
+      if (why) return why;
       const id = nanoid(8); // R2: 생성 시 발급, 이후 불변
+      const { w, h } = CATALOG[type].size;
+      const rect = type === 'nav' ? { x: 0, y: 0, w: COLS, h } : findFreeSpot(config.layout, w, h);
       set({
-        config: {
-          ...config,
-          slots: { ...config.slots, [slot]: [...config.slots[slot], id] },
-          blocks: { ...config.blocks, [id]: newBlock(type) },
-        },
+        config: { ...config, layout: resolve({ ...config.layout, [id]: rect }, id), blocks: { ...config.blocks, [id]: newBlock(type) } },
         selectedBlockId: id,
-        selectedSlot: slot,
         panelTab: 'block',
       });
       return null;
@@ -83,36 +73,23 @@ export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
     removeBlock: (id) => {
       const { config, selectedBlockId } = get();
       const blocks = { ...config.blocks };
+      const layout = { ...config.layout };
       delete blocks[id];
+      delete layout[id];
       set({
-        config: { ...config, slots: withoutId(config.slots, id), blocks },
+        config: { ...config, layout, blocks },
         selectedBlockId: selectedBlockId === id ? null : selectedBlockId,
       });
     },
 
-    moveBlock: (id, dir) => {
-      const { config } = get();
-      const slot = findSlotOf(config, id);
-      if (!slot) return;
-      const ids = [...config.slots[slot]];
-      const i = ids.indexOf(id);
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= ids.length) return;
-      [ids[i], ids[j]] = [ids[j], ids[i]];
-      set({ config: { ...config, slots: { ...config.slots, [slot]: ids } } });
-    },
-
-    // 위치만 바뀐다. 블록 id와 그 id에 묶인 데이터는 그대로 (R2/R3)
-    moveToSlot: (id, slot) => {
-      const { config } = get();
-      const block = config.blocks[id];
-      if (!block) return '블록이 없어요';
-      const check = canPlace(config, slot, block.type, id);
-      if (!check.ok) return check.reason;
-      const slots = withoutId(config.slots, id);
-      set({ config: { ...config, slots: { ...slots, [slot]: [...slots[slot], id] } }, selectedSlot: slot });
-      return null;
-    },
+    // 칸에 맞추고(정수·판 안·최소 크기) 그 자리를 차지한다. 겹친 블록은 아래로 밀린다 (6.3)
+    setRect: (id, rect) =>
+      set((s) => {
+        const block = s.config.blocks[id];
+        if (!block) return s;
+        const layout = resolve({ ...s.config.layout, [id]: clampRect(rect, block.type) }, id);
+        return { config: { ...s.config, layout } };
+      }),
 
     updateProps: (id, patch) =>
       set((s) => {

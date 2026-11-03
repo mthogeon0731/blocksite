@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import type { BlockData, Notice, NoticeInput, Photo, SiteConfig } from './schema';
+import { parseSiteConfig, type BlockData, type Notice, type NoticeInput, type Photo, type SiteConfig } from './schema';
 import type { Fail, PhotoInput, Store } from './store';
 import { SEED_SITE } from './seed';
 
@@ -22,8 +22,11 @@ interface StoredPhoto {
   caption: string;
   created_at: string;
 }
+// 저장된 config는 v1(자리 4개)일 수 있다. 읽을 때 parseSiteConfig가 v2로 바꾸고, 첫 저장 때 v2로 덮인다.
+// 여기서 직접 만지는 slug·blocks는 v1·v2 모양이 같다.
+type StoredConfig = Pick<SiteConfig, 'slug' | 'blocks'>;
 type Db = {
-  sites: Record<string, { config: SiteConfig; updated_at: string }>;
+  sites: Record<string, { config: StoredConfig; updated_at: string }>;
   notices: StoredNotice[];
   photos: StoredPhoto[];
 };
@@ -69,11 +72,13 @@ function mutate<T>(fn: (db: Db) => T | Promise<T>): Promise<T> {
 }
 
 async function getSite(id: string): Promise<SiteConfig | null> {
-  return (await load()).sites[id]?.config ?? null;
+  const config = (await load()).sites[id]?.config;
+  return config ? parseSiteConfig(config) : null;
 }
 
 async function getSiteBySlug(slug: string): Promise<SiteConfig | null> {
-  return Object.values((await load()).sites).find((s) => s.config.slug === slug)?.config ?? null;
+  const config = Object.values((await load()).sites).find((s) => s.config.slug === slug)?.config;
+  return config ? parseSiteConfig(config) : null;
 }
 
 function putSite(config: SiteConfig): Promise<{ updatedAt: string } | Fail> {
