@@ -22,7 +22,9 @@ function pickSlot(config: SiteConfig, selected: Slot | null, type: BlockType): {
 
 export function BlockPicker() {
   const config = useEditor((s) => s.config);
-  const selectedSlot = useEditor((s) => s.selectedSlot);
+  // 사용자가 자리(빈 자리/점선 영역)를 직접 클릭했을 때만 그 자리를 우선한다.
+  // 블록을 추가·선택해서 따라온 자리는 무시하고 블록 종류별 기본 자리로 보낸다 (데모 3번: 공지는 오른쪽).
+  const selectedSlot = useEditor((s) => (s.selectedBlockId ? null : s.selectedSlot));
   const addBlock = useEditor((s) => s.addBlock);
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
