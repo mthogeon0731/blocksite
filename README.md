@@ -76,9 +76,9 @@ npm run dev
 
 **프로덕션 (master, 그리드 개편 전)**: https://blocksite-seven.vercel.app — 공개 페이지 `/s/kim-lab`, 편집기 `/editor/site_kimlab?key=<EDITOR_KEY>`. Vercel 프로젝트 `blocksite`(계정 hogeon), Supabase 모드. 환경변수는 Vercel 프로젝트에 들어 있다(`npx vercel env ls`). `.vercelignore`가 `legacy/`, `.data/`, `.env*`를 업로드에서 뺀다.
 
-**그리드 개편 preview (`grid-layout`)**: 이 브랜치 폴더에서 `npx vercel deploy --yes`(`--prod` 없이). Preview 환경에도 같은 환경변수 3개가 있고 **프로덕션과 같은 Supabase DB**를 쓴다.
+**그리드 개편 preview (`grid-layout`, 2026-11-03)**: https://blocksite-7wr5s0tzp-hogeon.vercel.app — 다시 올리려면 이 브랜치 폴더에서 `npx vercel deploy --yes`(`--prod` 없이). Preview 환경에도 같은 환경변수 3개가 있고 **프로덕션과 같은 Supabase DB**를 쓴다.
 - preview 편집기에서는 **새 사이트로만** 편집한다(예: `/editor/grid-demo?key=<EDITOR_KEY>`). 기존 사이트(`/editor/site_kimlab`)를 preview 편집기로 열면 자동 높이 맞춤이 곧바로 v2로 저장해 프로덕션의 `/s/kim-lab`이 깨진다. 공개 페이지(`/s/kim-lab`)는 읽기만 하므로 열어도 된다.
-- preview 주소는 Vercel 로그인이 필요할 수 있다(프로젝트의 Deployment Protection 설정).
+- preview 주소는 Vercel 로그인이 필요하다(프로젝트의 Deployment Protection). 다른 사람에게 보여 주려면 Vercel 대시보드에서 그 배포의 공유 링크를 만든다. CLI로는 `npx vercel curl <주소>`로 확인할 수 있다.
 
 **프로덕션 반영 (지시가 있을 때만)**: `grid-layout`을 master에 병합 → `npx vercel deploy --prod --yes` → 프로덕션 편집기로 기존 사이트를 한 번 열어 높이를 맞춘다(v2로 저장). 그 뒤에는 옛 버전으로 되돌리면 v2로 저장된 사이트가 깨진다.
 
