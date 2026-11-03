@@ -1,26 +1,27 @@
 @import "tailwindcss";
+@source not "../../legacy";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* 사이트 단위 글자 크기(theme.scale → --s). Tailwind 글자 크기 변수를 .site 안에서만 덮어쓴다 (R5). */
+.site {
+  --text-xs: calc(0.75rem * var(--s, 1));
+  --text-sm: calc(0.875rem * var(--s, 1));
+  --text-base: calc(1rem * var(--s, 1));
+  --text-lg: calc(1.125rem * var(--s, 1));
+  --text-xl: calc(1.25rem * var(--s, 1));
+  --text-2xl: calc(1.5rem * var(--s, 1));
+  --text-3xl: calc(1.875rem * var(--s, 1));
+  --text-4xl: calc(2.25rem * var(--s, 1));
+  --text-5xl: calc(3rem * var(--s, 1));
+  font-size: var(--text-base);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+details > summary {
+  list-style: none;
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+details > summary::-webkit-details-marker {
+  display: none;
 }

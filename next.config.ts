@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // cacheComponents는 끈다: 공개 페이지·편집기가 매 요청 DB를 읽어야 한다 (SPEC 5.2).
   turbopack: {
     rules: {
       "*.css": {
