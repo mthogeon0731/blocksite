@@ -11,6 +11,11 @@ const FONTS: { value: Theme['font']; label: string; css: string }[] = [
   { value: 'noto-serif', label: 'Noto Serif KR (명조)', css: '"Noto Serif KR", serif' },
   { value: 'system', label: '시스템 기본', css: 'system-ui, sans-serif' },
 ];
+// GRID_SPEC 5.4 공개 페이지 배경 (사이트 단위). 편집용 격자와는 별개다
+const BACKGROUNDS: { value: Theme['background']; label: string }[] = [
+  { value: 'plain', label: '없음' },
+  { value: 'grid', label: '모눈' },
+];
 const SCALES: { value: Theme['scale']; label: string }[] = [
   { value: 'sm', label: '작게' },
   { value: 'md', label: '보통' },
@@ -100,6 +105,22 @@ function StylePanel() {
               className={`py-2 ${theme.scale === s.value ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-50'}`}
             >
               {s.label}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section>
+        <h3 className="font-semibold">배경</h3>
+        <p className="mt-0.5 text-xs text-neutral-500">공개 페이지 바탕이에요. 모눈은 블록이 놓인 칸에 맞춰 옅게 깔려요</p>
+        <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-lg border border-neutral-200">
+          {BACKGROUNDS.map((b) => (
+            <button
+              key={b.value}
+              type="button"
+              onClick={() => setTheme({ background: b.value })}
+              className={`py-2 ${theme.background === b.value ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-50'}`}
+            >
+              {b.label}
             </button>
           ))}
         </div>

@@ -109,3 +109,16 @@ test('되돌리기: 기능 연결 상태는 유지, 공지가 있는 블록이 �
   assert.ok(s().config.blocks[id]);
   assert.match(s().toast, /건너뛰었어요/);
 });
+
+test('부품: 한 부품을 바꿔도 다른 부품·모양은 그대로, 되돌리기 한 번에 한 단계', () => {
+  const st = createEditorStore(emptyConfig('t'), {});
+  const s = () => st.getState();
+  s().addBlock('profile');
+  const id = Object.keys(s().config.blocks)[0];
+  s().updateLook(id, { photoShape: 'square', pad: 0 });
+  s().setPart(id, 'name', { align: 'right' });
+  s().setPart(id, 'title', { hidden: true });
+  assert.deepEqual(s().config.blocks[id].look, { photoShape: 'square', pad: 0, parts: { name: { align: 'right' }, title: { hidden: true } } });
+  s().undo();
+  assert.deepEqual(s().config.blocks[id].look.parts, { name: { align: 'right' } });
+});

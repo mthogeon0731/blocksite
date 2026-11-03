@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { CATALOG } from '@/lib/catalog';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { CATALOG, lookOf } from '@/lib/catalog';
 import { COLS, MAX_ROWS } from '@/lib/grid';
-import type { Block, Notice, Photo, PropsOf } from '@/lib/schema';
-import { useEditor } from '@/store/editor';
+import type { Block, BlockType, Notice, Photo, PropsOf } from '@/lib/schema';
+import { cx } from '@/renderer/SiteRenderer';
+import { partOf, type Align } from '@/renderer/blocks/parts';
+import { useEditor, type Look } from '@/store/editor';
 import { PayModal } from './PayModal';
 
 const input = 'w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none';
@@ -31,6 +33,10 @@ export function BlockPanel() {
       </div>
 
       <RectForm id={id} />
+
+      <LookForm id={id} block={block} />
+
+      <PartsForm id={id} block={block} />
 
       <PropsForm key={id} id={id} block={block} />
 
@@ -75,9 +81,9 @@ function RectForm({ id }: { id: string }) {
   const rect = useEditor((s) => s.config.layout[id]);
   const setRect = useEditor((s) => s.setRect);
   if (!rect) return null;
-  // 너비·높이를 바꿀 때는 위치를 지키고 판 끝까지만 늘린다. 입력칸 타이핑은 되돌리기에서 1초 단위로 묶는다
-  const set = (k: (typeof RECT_FIELDS)[number][0], v: number, group?: string) =>
-    setRect(id, { ...rect, [k]: k === 'w' ? Math.min(v, COLS - rect.x) : k === 'h' ? Math.min(v, MAX_ROWS - rect.y) : v }, group);
+  // 너비·높이를 바꿀 때는 위치를 지키고 판 끝까지만 늘린다
+  const set = (k: (typeof RECT_FIELDS)[number][0], v: number) =>
+    setRect(id, { ...rect, [k]: k === 'w' ? Math.min(v, COLS - rect.x) : k === 'h' ? Math.min(v, MAX_ROWS - rect.y) : v });
   return (
     <section>
       <h3 className="mb-2 text-xs font-medium text-neutral-600">위치·크기 (칸)</h3>
@@ -91,12 +97,19 @@ function RectForm({ id }: { id: string }) {
               <button type="button" aria-label={`${label} 줄이기`} onClick={() => set(k, rect[k] - 1)} className="px-2 text-neutral-500 hover:bg-neutral-50">
                 −
               </button>
+              {/* 숫자는 Enter·포커스를 옮길 때 적용한다(타이핑 중간값 "2"가 최소 크기로 바뀌지 않게). 끌기 등으로 값이 바뀌면 key로 새로 그린다 */}
               <input
+                key={rect[k]}
                 type="number"
                 aria-label={label}
-                value={rect[k]}
-                onChange={(e) => {
-                  if (!Number.isNaN(e.target.valueAsNumber)) set(k, e.target.valueAsNumber, `type:${id}`);
+                defaultValue={rect[k]}
+                onBlur={(e) => {
+                  const v = e.target.valueAsNumber;
+                  if (Number.isNaN(v)) e.target.value = String(rect[k]);
+                  else if (v !== rect[k]) set(k, v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
                 }}
                 className="w-full min-w-0 border-x border-neutral-200 px-1 py-1 text-center text-sm focus:outline-none"
               />
@@ -107,6 +120,144 @@ function RectForm({ id }: { id: string }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+// ---------- 모양 (GRID_SPEC 7.1 공통 + 7.3 종류별). 정해진 선택지만 (R5′) ----------
+
+type Opt = [string | number | boolean, string];
+type LookField = { key: string; label: string; options: Opt[] };
+
+const COMMON_LOOK: LookField[] = [
+  { key: 'frame', label: '바탕', options: [['card', '카드'], ['plain', '없음'], ['fill', '포인트 색']] },
+  { key: 'corner', label: '모서리', options: [['round', '둥글게'], ['square', '각지게']] },
+  { key: 'pad', label: '안쪽 여백', options: [[0, '없음'], [1, '좁게'], [2, '보통'], [3, '넓게']] },
+  { key: 'valign', label: '세로 위치', options: [['top', '위'], ['middle', '가운데'], ['bottom', '아래']] },
+];
+const TYPE_LOOK: Partial<Record<BlockType, LookField[]>> = {
+  nav: [{ key: 'navLayout', label: '메뉴 배치', options: [['spread', '양쪽 끝'], ['stack', '위아래'], ['center', '가운데']] }],
+  profile: [
+    { key: 'photoShape', label: '사진 모양', options: [['portrait', '세로'], ['square', '네모'], ['circle', '동그라미']] },
+    { key: 'photoPos', label: '사진 위치', options: [['top', '위'], ['left', '왼쪽'], ['right', '오른쪽']] },
+    { key: 'photoSize', label: '사진 크기', options: [['s', '작게'], ['m', '보통'], ['l', '크게']] },
+  ],
+  publications: [{ key: 'yearPos', label: '연도', options: [['left', '보이기'], ['hidden', '숨기기']] }],
+  notices: [{ key: 'showDate', label: '날짜', options: [[true, '보이기'], [false, '숨기기']] }],
+  photos: [{ key: 'ratio', label: '사진 비율', options: [['4:3', '4:3'], ['1:1', '1:1'], ['3:4', '3:4']] }],
+};
+const BLEED: Opt[] = [['none', '안 함'], ['left', '왼쪽'], ['right', '오른쪽'], ['both', '양쪽']];
+
+function Choice({ label, value, options, onPick, can, off, note }: { label: string; value: unknown; options: Opt[]; onPick: (v: Opt[0]) => void; can?: (v: Opt[0]) => boolean; off?: boolean; note?: string }) {
+  return (
+    <div>
+      <span className="mb-1 block text-xs font-medium text-neutral-600">{label}</span>
+      <div className={cx('grid overflow-hidden rounded-lg border border-neutral-200', off && 'opacity-50')} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+        {options.map(([v, text]) => (
+          <button
+            key={String(v)}
+            type="button"
+            aria-pressed={value === v}
+            disabled={can ? !can(v) : false}
+            onClick={() => onPick(v)}
+            className={cx('py-1.5 text-xs disabled:cursor-not-allowed disabled:text-neutral-300', value === v ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-50')}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {note && <p className="mt-1 text-[11px] leading-snug text-neutral-400">{note}</p>}
+    </div>
+  );
+}
+
+function LookForm({ id, block }: { id: string; block: Block }) {
+  const rect = useEditor((s) => s.config.layout[id]);
+  const updateLook = useEditor((s) => s.updateLook);
+  const look = lookOf(block) as Record<string, unknown>;
+  const pick = (key: string) => (v: Opt[0]) => updateLook(id, { [key]: v } as Look);
+  // bleed는 그쪽 벽에 닿아 있을 때만 고를 수 있고 그때만 효과가 있다. 벽에서 떼면 비활성으로 보이고 값은 남는다 (7.1)
+  const left = rect?.x === 0;
+  const right = !!rect && rect.x + rect.w === COLS;
+  const canBleed = (v: Opt[0]) => v === 'none' || (v === 'left' ? left : v === 'right' ? right : left && right);
+  const bleedOff = look.bleed !== 'none' && !canBleed(look.bleed as Opt[0]);
+  const choice = (f: LookField) => <Choice key={f.key} label={f.label} value={look[f.key]} options={f.options} onPick={pick(f.key)} />;
+  return (
+    <section className="space-y-2.5">
+      <h3 className="text-xs font-semibold text-neutral-700">모양</h3>
+      {COMMON_LOOK.map(choice)}
+      {look.frame !== 'plain' && (
+        <Choice
+          label="바탕을 화면 끝까지"
+          value={look.bleed}
+          options={BLEED}
+          onPick={pick('bleed')}
+          can={canBleed}
+          off={bleedOff}
+          note={bleedOff ? '블록이 그쪽 벽에서 떨어져 있어 지금은 적용되지 않아요' : '판의 왼쪽·오른쪽 벽에 붙은 블록만 고를 수 있어요'}
+        />
+      )}
+      {(TYPE_LOOK[block.type] ?? []).map(choice)}
+    </section>
+  );
+}
+
+// ---------- 부품 정렬·숨기기 (7.2) ----------
+
+const ALIGN_BUTTONS: [Align, string][] = [
+  ['left', '왼쪽'],
+  ['center', '가운데'],
+  ['right', '오른쪽'],
+];
+
+function PartsForm({ id, block }: { id: string; block: Block }) {
+  const selectedPart = useEditor((s) => s.selectedPart);
+  const selectPart = useEditor((s) => s.selectPart);
+  const setPart = useEditor((s) => s.setPart);
+  const look = lookOf(block);
+  // 미리보기에서 부품을 고르면 그 행으로 스크롤한다 (6.4)
+  useEffect(() => {
+    if (selectedPart) document.querySelector(`[data-part-row="${selectedPart}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedPart]);
+  return (
+    <section className="space-y-1">
+      <h3 className="text-xs font-semibold text-neutral-700">부품</h3>
+      {'navLayout' in look && look.navLayout !== 'stack' && <p className="text-[11px] text-neutral-400">정렬은 메뉴 배치가 &apos;위아래&apos;일 때 적용돼요</p>}
+      {CATALOG[block.type].parts.map((p) => {
+        const cur = partOf(look, p.key);
+        return (
+          <div
+            key={p.key}
+            data-part-row={p.key}
+            onClick={() => selectPart(p.key)}
+            className={cx('flex items-center gap-1.5 rounded-md px-1.5 py-1', selectedPart === p.key ? 'bg-indigo-50 ring-1 ring-indigo-200' : 'hover:bg-neutral-50')}
+          >
+            <span className={cx('flex-1 text-xs', cur.hidden && 'text-neutral-400 line-through')}>{p.label}</span>
+            <div className="flex overflow-hidden rounded border border-neutral-200">
+              {ALIGN_BUTTONS.map(([a, text]) => (
+                <button
+                  key={a}
+                  type="button"
+                  aria-pressed={cur.align === a}
+                  onClick={() => setPart(id, p.key, { align: a })}
+                  className={cx('px-1.5 py-0.5 text-[11px]', cur.align === a ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-100')}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={p.required}
+              title={p.required ? '꼭 필요한 부품이라 숨길 수 없어요' : undefined}
+              onClick={() => setPart(id, p.key, { hidden: !cur.hidden })}
+              className="w-12 rounded border border-neutral-200 px-1 py-0.5 text-[11px] hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {cur.hidden ? '보이기' : '숨기기'}
+            </button>
+          </div>
+        );
+      })}
     </section>
   );
 }

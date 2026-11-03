@@ -3,8 +3,10 @@ import type { Block, SiteConfig, Theme } from '@/lib/schema';
 import { COLS, orderedIds, type Rect } from '@/lib/grid';
 import { lookOf } from '@/lib/catalog';
 import { renderBlock, type BlockData, type Mode } from './blocks';
+import { cx } from './blocks/parts';
 
 export type { BlockData, Mode };
+export { cx };
 
 const FONT_STACK: Record<Theme['font'], string> = {
   pretendard: '"Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
@@ -17,8 +19,6 @@ const SCALE: Record<Theme['scale'], number> = { sm: 0.9, md: 1, lg: 1.15 };
 export function themeStyle(theme: Theme): CSSProperties {
   return { '--accent': theme.accent, '--s': SCALE[theme.scale], fontFamily: FONT_STACK[theme.font] } as CSSProperties;
 }
-
-export const cx = (...xs: Array<string | false | null | undefined>) => xs.filter(Boolean).join(' ');
 
 // 칸 직사각형 → 판(CSS Grid) 위 자리. 편집기 장식도 같은 자리에 겹친다
 export const gridPlace = (r: Rect): CSSProperties => ({ gridColumn: `${r.x + 1} / span ${r.w}`, gridRow: `${r.y + 1} / span ${r.h}` });
@@ -38,7 +38,7 @@ export function SiteRenderer({ config, data, mode, overlay }: RenderProps) {
       className={cx('site @container min-h-full bg-neutral-50 text-neutral-900', mode === 'public' && 'overflow-x-clip')}
       style={themeStyle(config.theme)}
     >
-      <div className="board" data-mode={mode}>
+      <div className="board" data-mode={mode} data-bg={config.theme.background}>
         {orderedIds(config.layout).map((id) => {
           const block = config.blocks[id];
           if (!block) return null;
@@ -57,7 +57,7 @@ export function SiteRenderer({ config, data, mode, overlay }: RenderProps) {
 const FRAME = {
   card: 'border border-neutral-200 bg-white [--bw:1px]',
   plain: '',
-  fill: 'bg-(--accent) text-white',
+  fill: 'frame-fill bg-(--accent) text-white', // 안쪽 글자는 흰색으로 (globals.css .frame-fill)
 } as const;
 const PAD = ['p-0', 'p-2', 'p-5', 'p-8'] as const; // 0 / 8 / 20 / 32px. 글자 크기 배율은 적용하지 않는다
 const VALIGN = { top: 'justify-start', middle: 'justify-center', bottom: 'justify-end' } as const;

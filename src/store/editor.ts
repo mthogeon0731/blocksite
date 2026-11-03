@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { Block, BlockData, BlockType, Notice, Photo, SiteConfig, Theme } from '@/lib/schema';
+import type { Block, BlockData, BlockType, LookOf, Notice, Photo, SiteConfig, Theme } from '@/lib/schema';
 import { CATALOG, newBlock } from '@/lib/catalog';
 import {
   COLS,
@@ -29,6 +29,8 @@ type ItemOf<K extends DataKind> = K extends 'notices' ? Notice : Photo;
 
 export type Cell = { x: number; y: number };
 export const NEW_ID = '__new'; // 놓기 전 새 블록 자리(고스트). config에는 들어가지 않는다
+export type Look = Partial<LookOf<BlockType>>;
+export type PartPatch = { align?: 'left' | 'center' | 'right'; hidden?: boolean };
 
 // 끄는 동안의 결과 배치(밀려날 블록 포함). 저장·되돌리기 대상이 아니다 (GRID_SPEC 6.2)
 export interface Draft {
@@ -47,10 +49,14 @@ export interface EditorState {
   dropAt: Cell | null; // 빈 칸 클릭으로 고른 "놓을 자리" (6.6-3)
   showGrid: boolean; // 상단 바 "격자 보기"
   selectedBlockId: string | null;
+  selectedPart: string | null; // 선택된 블록 안에서 고른 부품 (GRID_SPEC 6.1)
   panelTab: 'style' | 'block';
   saveState: SaveState;
   toast: string | null;
   selectBlock: (id: string | null) => void;
+  selectPart: (part: string | null) => void;
+  updateLook: (id: string, patch: Look, group?: string) => void; // 7절 모양 (정해진 선택지만)
+  setPart: (id: string, part: string, patch: PartPatch, group?: string) => void; // 7.2 부품 정렬·숨기기
   setPanelTab: (tab: 'style' | 'block') => void;
   // at이 없으면 빈 자리 자동(6.6-4). {x, y}면 그 칸이 왼쪽 위, {x, y, w, h}면 그 사각형 그대로. 실패하면 이유
   addBlock: (type: BlockType, at?: Cell & Partial<Pick<Rect, 'w' | 'h'>>) => string | null;
@@ -148,11 +154,23 @@ export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
       dropAt: null,
       showGrid: true,
       selectedBlockId: null,
+      selectedPart: null,
       panelTab: 'style',
       saveState: { kind: 'idle' },
       toast: null,
 
-      selectBlock: (id) => set(id ? { selectedBlockId: id, panelTab: 'block', dropAt: null } : { selectedBlockId: null }),
+      selectBlock: (id) => set(id ? { selectedBlockId: id, selectedPart: null, panelTab: 'block', dropAt: null } : { selectedBlockId: null, selectedPart: null }),
+      selectPart: (selectedPart) => set({ selectedPart }),
+      updateLook: (id, patch, group) => {
+        const { config } = get();
+        const block = config.blocks[id];
+        if (block) commit({ ...config, blocks: { ...config.blocks, [id]: { ...block, look: { ...block.look, ...patch } } as Block } }, group);
+      },
+      // 부품별로 합친다: 한 부품을 바꿔도 다른 부품 설정은 그대로
+      setPart: (id, part, patch, group) => {
+        const parts = get().config.blocks[id]?.look?.parts as Record<string, PartPatch> | undefined;
+        get().updateLook(id, { parts: { ...parts, [part]: { ...parts?.[part], ...patch } } } as Look, group);
+      },
       setPanelTab: (panelTab) => set({ panelTab }),
 
       addBlock: (type, at) => {
@@ -204,7 +222,7 @@ export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
 
       setDraft: (draft) => set({ draft }),
       setMenuRect: (menuRect) => set({ menuRect }),
-      setDropAt: (dropAt) => set(dropAt ? { dropAt, selectedBlockId: null } : { dropAt: null }),
+      setDropAt: (dropAt) => set(dropAt ? { dropAt, selectedBlockId: null, selectedPart: null } : { dropAt: null }),
       toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
       undo: () => travel(get().past, get().future, true),
       redo: () => travel(get().future, get().past, false),

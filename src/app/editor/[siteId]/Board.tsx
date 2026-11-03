@@ -5,6 +5,7 @@ import { CATALOG, CATALOG_LIST, lookOf } from '@/lib/catalog';
 import { BASE_W, CELL, COLS, bottom, canAdd, clampRect, liftUp, overlaps, resizeRect, resolve, type Dir, type Layout, type Rect } from '@/lib/grid';
 import type { BlockType } from '@/lib/schema';
 import { SiteRenderer, cx, gridPlace } from '@/renderer/SiteRenderer';
+import type { Align } from '@/renderer/blocks/parts';
 import { NEW_ID, useEditor, useEditorStore, type Cell, type EditorStore } from '@/store/editor';
 
 // 요소 크기 (ResizeObserver, transform 전 값). 상태는 관찰 콜백에서만 바꾼다
@@ -81,6 +82,7 @@ interface Gesture {
   start: Layout; // 누른 순간의 배치. 매번 여기서 다시 계산해 밀림이 쌓이지 않는다
   active: boolean; // 1칸 이상 움직였나 (아니면 클릭)
   last?: string;
+  part?: string; // 이미 선택된 블록 안에서 누른 부품 (클릭이면 부품 선택, 6.1)
 }
 
 // GRID_SPEC 5.3 편집기 판: 기준 폭 1152px(칸 24px)로 그리고 미리보기 영역에 맞게 축소한다(k ≤ 1). 공개 페이지와 같은 줄바꿈(R9).
@@ -92,6 +94,8 @@ export function Board() {
   const draft = useEditor((s) => s.draft);
   const menuRect = useEditor((s) => s.menuRect);
   const showGrid = useEditor((s) => s.showGrid);
+  const selectedId = useEditor((s) => s.selectedBlockId);
+  const selectedPart = useEditor((s) => s.selectedPart);
   const areaRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -130,9 +134,18 @@ export function Board() {
     if (!blockId && !from.inside) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     setHover(null);
-    if (blockId) s.selectBlock(blockId);
+    const wasSelected = blockId === s.selectedBlockId;
+    if (blockId && !wasSelected) s.selectBlock(blockId);
     // 블록 위에서 시작하면 이동, 손잡이는 크기 조절, 빈 칸에서 시작해야 자리 그리기
-    gesture.current = { kind: dir ? 'resize' : blockId ? 'move' : 'draw', id: blockId ?? NEW_ID, dir, from, start: s.config.layout, active: false };
+    gesture.current = {
+      kind: dir ? 'resize' : blockId ? 'move' : 'draw',
+      id: blockId ?? NEW_ID,
+      dir,
+      from,
+      start: s.config.layout,
+      active: false,
+      part: wasSelected && !dir ? target.closest<HTMLElement>('[data-part]')?.dataset.part : undefined,
+    };
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -183,6 +196,7 @@ export function Board() {
     if (g.kind === 'draw' && s.draft) return s.setMenuRect(s.draft.layout[NEW_ID]); // 그린 자리 옆에 종류 메뉴
     if (g.kind === 'draw') s.setDropAt({ x: g.from.x, y: g.from.y }); // 빈 칸 클릭: 선택 해제 + 놓을 자리 (6.6-3)
     else if (s.draft) s.setLayout(s.draft.layout); // 끈 결과를 한 단계로 확정
+    else if (g.kind === 'move') s.selectPart(g.part ?? null); // 선택된 블록 안 클릭: 부품 선택(부품 밖이면 블록 선택으로)
     s.setDraft(null);
   };
 
@@ -200,6 +214,12 @@ export function Board() {
   return (
     // 스크롤바 자리를 늘 비워 둔다: 끄는 중에 판이 길어져 스크롤바가 생겨도 축소 배율 k가 바뀌지 않게
     <main ref={areaRef} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-6 pt-12 [scrollbar-gutter:stable]">
+      {selectedId && (
+        // 선택된 블록의 부품: 올리면 옅은 점선, 고르면 포인트 색 점선 (블록 컴포넌트는 data-part만 단다)
+        <style>{`.editor-stage [data-block-id="${selectedId}"] [data-part]:hover { outline: 1px dashed var(--color-neutral-400); outline-offset: 2px; cursor: pointer; }${
+          selectedPart ? ` .editor-stage [data-block-id="${selectedId}"] [data-part="${selectedPart}"] { outline: 2px dashed var(--accent); outline-offset: 2px; }` : ''
+        }`}</style>
+      )}
       <div className="mx-auto" style={{ width: BASE_W * k, height: stage.height * k, visibility: k ? undefined : 'hidden' }}>
         <div
           ref={stageRef}
@@ -276,6 +296,7 @@ function useAutoFit(stageRef: RefObject<HTMLDivElement | null>) {
 }
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+const ALIGNS: Align[] = ['left', 'center', 'right'];
 
 // 6.2 키보드(블록 선택 상태, 입력칸에 포커스가 없을 때) + 6.7 되돌리기·다시 하기
 function useKeys(gesture: RefObject<Gesture | null>) {
@@ -294,23 +315,30 @@ function useKeys(gesture: RefObject<Gesture | null>) {
         s.setDraft(null);
         s.setMenuRect(null);
         s.setDropAt(null);
-        return s.selectBlock(null);
+        return s.selectedPart ? s.selectPart(null) : s.selectBlock(null); // 부품 선택 → 블록 선택 → 해제
       }
       const id = s.selectedBlockId;
       const r = id ? s.config.layout[id] : undefined;
       const block = id ? s.config.blocks[id] : undefined;
       if (!id || !r || !block) return;
       const arrow = ARROWS[e.key];
-      if (arrow) {
+      const part = s.selectedPart;
+      if (part && arrow?.[0] && !e.altKey) {
+        // 부품 선택 상태의 ← →: 정렬을 왼쪽 ↔ 가운데 ↔ 오른쪽으로 한 단계
+        e.preventDefault();
+        const cur = (lookOf(block).parts as Record<string, { align?: Align } | undefined>)[part]?.align ?? 'left';
+        const next = ALIGNS[Math.max(0, Math.min(2, ALIGNS.indexOf(cur) + arrow[0]))];
+        if (next !== cur) s.setPart(id, part, { align: next }, `key:${id}`);
+      } else if (arrow) {
         e.preventDefault();
         const [ax, ay] = arrow;
         const n = e.shiftKey ? 4 : 1;
         // 화살표 1칸, Shift 4칸 이동. Alt는 오른쪽 변·아래 변 크기 조절. 같은 블록 연속 입력은 0.8초 단위로 한 단계
         const next = e.altKey ? resizeRect(r, ax ? 'e' : 's', ax, ay, block.type) : { ...r, x: r.x + ax * n, y: r.y + ay * n };
         s.setRect(id, next, `key:${id}`);
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !part) {
         e.preventDefault();
-        removeChecked(store, id);
+        removeChecked(store, id); // 부품을 고른 상태에서는 블록을 지우지 않는다
       }
     };
     window.addEventListener('keydown', onKey);

@@ -33,9 +33,22 @@
   grid-template-columns: repeat(48, var(--cell));
   grid-auto-rows: minmax(var(--cell), auto);
   align-content: start; /* 판이 행보다 높아도(편집기 여유 줄) 행을 늘리지 않는다 */
+  position: relative;
   width: fit-content;
   margin-inline: auto;
   padding-bottom: var(--cell);
+}
+/* 5.4 사이트 배경 "모눈"(theme.background = grid): 판과 같은 칸 크기의 옅은 모눈을 화면 폭 전체에 깐다.
+   판 왼쪽 위(100vmax 밀어낸 자리)에서 시작해 선이 칸 경계와 정확히 맞고, 칸이 줄면 같이 준다. 블록보다 뒤에 그린다 */
+.board[data-bg="grid"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 -100vmax;
+  pointer-events: none;
+  --line: color-mix(in srgb, var(--accent) 9%, transparent);
+  background-image: linear-gradient(to right, var(--line) 1px, transparent 1px), linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: 100vmax 0;
 }
 .board[data-mode="edit"] {
   --cell: 24px; /* 편집기: 24px 고정, 미리보기 영역에 맞게 transform으로 축소한다 (5.3) */
@@ -50,6 +63,15 @@
     width: auto;
     padding: 0 16px 16px; /* 위는 데스크톱처럼 판 맨 위(y = 0)부터 */
   }
+  .board[data-bg="grid"]::before {
+    background-size: 24px 24px; /* 모바일은 24px 모눈을 화면 전체에 */
+    background-position: 0 0;
+  }
+}
+
+/* 바탕 fill(포인트 색): 블록 안 글자를 흰색으로. 사진 자리 글자(div)는 그대로 둔다 */
+.frame-fill :where(h2, p, span, a, time, li, figcaption) {
+  color: inherit;
 }
 
 /* 블록 bleed (7.1): 바탕을 그쪽 화면 끝까지 잇는다. 내용 위치는 그대로. card면 위아래 테두리도 잇는다(--bw) */

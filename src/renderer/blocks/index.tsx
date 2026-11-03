@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { Block, BlockData, Theme } from '@/lib/schema';
+import type { Block, BlockData, BlockType, LookOf, PropsOf, Theme } from '@/lib/schema';
+import { lookOf } from '@/lib/catalog';
 import { NavBlock } from './NavBlock';
 import { ProfileBlock } from './ProfileBlock';
 import { TextBlock } from './TextBlock';
@@ -15,8 +16,10 @@ export interface BlockCtx {
   mode: Mode;
   site: { title: string };
 }
-export interface BlockProps<P, D = undefined> extends BlockCtx {
-  props: P;
+// look은 기본값에 블록의 look을 덮어쓴 것. 편집·공개 모드 모두 같은 마크업을 그린다 (R6)
+export interface BlockProps<T extends BlockType, D = undefined> extends BlockCtx {
+  props: PropsOf<T>;
+  look: LookOf<T>;
   data?: D;
   connected: boolean;
 }
@@ -28,16 +31,16 @@ export function renderBlock(id: string, block: Block, data: BlockData, ctx: Bloc
   const base = { ...ctx, connected };
   switch (block.type) {
     case 'nav':
-      return <NavBlock {...base} props={block.props} />;
+      return <NavBlock {...base} props={block.props} look={lookOf(block) as LookOf<'nav'>} />;
     case 'profile':
-      return <ProfileBlock {...base} props={block.props} />;
+      return <ProfileBlock {...base} props={block.props} look={lookOf(block) as LookOf<'profile'>} />;
     case 'text':
-      return <TextBlock {...base} props={block.props} />;
+      return <TextBlock {...base} props={block.props} look={lookOf(block) as LookOf<'text'>} />;
     case 'publications':
-      return <PublicationsBlock {...base} props={block.props} />;
+      return <PublicationsBlock {...base} props={block.props} look={lookOf(block) as LookOf<'publications'>} />;
     case 'notices':
-      return <NoticesBlock {...base} props={block.props} data={data.notices?.[id]} />;
+      return <NoticesBlock {...base} props={block.props} look={lookOf(block) as LookOf<'notices'>} data={data.notices?.[id]} />;
     case 'photos':
-      return <PhotosBlock {...base} props={block.props} data={data.photos?.[id]} />;
+      return <PhotosBlock {...base} props={block.props} look={lookOf(block) as LookOf<'photos'>} data={data.photos?.[id]} />;
   }
 }

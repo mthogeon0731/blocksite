@@ -53,7 +53,7 @@ npm run dev
 
 서버 검증 점검(서버 켜고): `node scripts/check-rules.mjs` — 판 규칙·스키마 16건, 연결·공지 11건, 사진 13건, v1 → v2 변환 2건 = 42건. 점검용 사이트 `site_check`만 쓰고 시드 사이트는 건드리지 않는다. Supabase 모드에서는 site_check를 v2로 쓰므로 그 DB를 읽는 배포본이 v2 코드일 때만 돌린다.
 
-판 규칙·되돌리기 단위 확인(서버 불필요): `node --test scripts/grid.test.mjs` — resolve(밀어내기)·빈 줄 정리·빈 자리 찾기·위로 붙이기·v1 변환·손잡이 크기 조절·되돌리기(묶기·연결 유지·데이터 보호) 11건.
+판 규칙·되돌리기 단위 확인(서버 불필요): `node --test scripts/grid.test.mjs` — resolve(밀어내기)·빈 줄 정리·빈 자리 찾기·위로 붙이기·v1 변환·손잡이 크기 조절·되돌리기(묶기·연결 유지·데이터 보호)·부품 설정 12건.
 
 ## 배포 (Vercel + Supabase)
 
@@ -80,7 +80,7 @@ src/lib/db.ts             저장소 선택(환경변수) — 라우트·페이�
 src/lib/db.local.ts       로컬 JSON 파일 + 업로드 폴더
 src/lib/db.supabase.ts    Supabase Postgres + Storage
 src/lib/auth.ts           EDITOR_KEY 쿠키 검사
-src/renderer/             SiteRenderer (config, data, mode) → UI, blocks/ 6개
+src/renderer/             SiteRenderer (config, data, mode) → UI, blocks/ 6개(look을 props로 받아 그림, 부품마다 data-part) + parts.ts(부품 정렬·숨기기)
 src/store/editor.ts       zustand 편집기 스토어
 src/app/editor/[siteId]   편집기 (3단): Editor(상단 바·자동 저장)·Board(모눈판·끌기·크기 조절·자리 그리기·키보드·자동 높이 맞춤)·BlockPicker(카드 끌어다 놓기)·SidePanel·BlockPanel·PayModal·loading
 src/app/s/[slug]          공개 페이지 (+ loading)
@@ -89,7 +89,7 @@ src/app/api/notices       GET/POST, [id]/ DELETE
 src/app/api/photos        GET/POST(multipart), [id]/ DELETE
 src/app/uploads/[...path] 로컬 업로드 파일 서빙 (Supabase 모드에서는 안 쓴다)
 scripts/check-rules.mjs   서버 검증 점검 42건
-scripts/grid.test.mjs     판 규칙·되돌리기 단위 확인 11건 (node --test)
+scripts/grid.test.mjs     판 규칙·되돌리기 단위 확인 12건 (node --test)
 supabase/                 마이그레이션·시드 SQL
 legacy/                   교수님 홈페이지 정적 미리보기 (참고용, 빌드 제외)
 ```
