@@ -162,9 +162,11 @@ r = await upload({ file: new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], { type
 expect('over 10MB → 400', r.status === 400, r);
 
 const p1 = await upload({ file: new Blob([PNG], { type: 'image/png' }), caption: '첫 사진' });
-expect('upload → 201 with url', p1.status === 201 && typeof p1.body?.url === 'string' && p1.body.url.startsWith('/uploads/'), p1);
+expect('upload → 201 with url', p1.status === 201 && typeof p1.body?.url === 'string' && p1.body.url.endsWith('.png'), p1);
 
-let img = await fetch(`${BASE}${p1.body.url}`);
+// 로컬 저장소는 /uploads/... 상대 경로, Supabase는 Storage 절대 URL
+const fileUrl = p1.body.url.startsWith('http') ? p1.body.url : `${BASE}${p1.body.url}`;
+let img = await fetch(fileUrl);
 expect('GET uploaded file → 200 image/png', img.status === 200 && img.headers.get('content-type') === 'image/png', img.status);
 
 img = await fetch(`${BASE}/uploads/..%2F..%2Fpackage.json`);
@@ -185,9 +187,9 @@ r = await put(CID, empty);
 expect('remove block with photos → 400', r.status === 400 && /사진 1장/.test(r.body.error), r);
 
 r = await call(`/api/photos/${p1.body.id}`, 'DELETE');
-img = await fetch(`${BASE}${p1.body.url}`);
+img = await fetch(`${fileUrl}${fileUrl.includes('?') ? '&' : '?'}v=${Date.now()}`); // Supabase CDN 캐시를 피해 원본에 묻는다
 const r4 = await call(`/api/photos/${p1.body.id}`, 'DELETE');
-expect('DELETE photo → 200, file 404, again 404', r.status === 200 && img.status === 404 && r4.status === 404, [r.status, img.status, r4.status]);
+expect('DELETE photo → 200, file gone, again 404', r.status === 200 && img.status !== 200 && r4.status === 404, [r.status, img.status, r4.status]);
 
 r = await put(CID, empty);
 expect('cleanup: empty check site → 200', r.status === 200, r);
