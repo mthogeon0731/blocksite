@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local json store
 /.data/
+
+.vercel
+.env*

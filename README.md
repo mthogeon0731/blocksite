@@ -23,7 +23,7 @@ npm run dev
 `.env.example` 참고.
 
 - `EDITOR_KEY`: 설정하면 편집기와 쓰기 API가 쿠키를 확인한다. 편집기를 `/editor/site_kimlab?key=값`으로 한 번 열면 쿠키가 저장된다. 로컬에서는 비워 둬도 된다. **배포할 때는 꼭 설정한다.**
-- `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: 둘 다 있으면 Supabase를 쓴다(아래 "배포"). 없으면 로컬 파일 저장소.
+- `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: 둘 다 있으면 Supabase를 쓴다(아래 "배포"). 없으면 로컬 파일 저장소. URL은 `https://<ref>.supabase.co`까지만(뒤에 `/rest/v1/`이 붙으면 안 된다). 키는 새 형식 `sb_secret_…`도 된다.
 
 ## 데모 순서 (심사 시연, 3분 — SPEC 10절)
 
@@ -53,10 +53,12 @@ npm run dev
 
 ## 배포 (Vercel + Supabase)
 
+**현재 배포본 (2026-11-03)**: https://blocksite-seven.vercel.app — 공개 페이지 `/s/kim-lab`, 편집기 `/editor/site_kimlab?key=<EDITOR_KEY>`. Vercel 프로젝트 `blocksite`(계정 hogeon), Supabase 모드. 다시 배포하려면 이 폴더에서 `npx vercel deploy --prod --yes` (Vercel CLI 로그인 필요). 환경변수는 Vercel 프로젝트에 들어 있다(`npx vercel env ls production`). `.vercelignore`가 `legacy/`, `.data/`, `.env*`를 업로드에서 뺀다.
+
 로컬 파일 저장소는 Vercel에서 쓸 수 없으므로 Supabase가 필요하다.
 
 1. Supabase 프로젝트 생성 → SQL Editor에서 `supabase/migrations/0001_init.sql` 실행(테이블 + 공개 버킷 `photos`. 버킷 생성이 거부되면 Storage 메뉴에서 `photos`를 Public으로 직접 만든다) → `supabase/seed.sql` 실행.
-2. 로컬 `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EDITOR_KEY`를 넣고 `npm run dev` → `node scripts/check-rules.mjs`가 33건 통과하는지 확인한다. (`src/lib/db.supabase.ts`는 2026-11-03 현재 실제 프로젝트로 검증하지 못한 코드다. 이 단계에서 걸러진다.)
+2. 로컬 `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `EDITOR_KEY`를 넣고 `npm run dev` → `node scripts/check-rules.mjs`가 33건 통과하는지 확인한다. (`src/lib/db.supabase.ts`는 2026-11-03 실제 프로젝트로 33건 통과를 확인했다.)
 3. 저장소를 GitHub에 올리고 Vercel에서 Import → Environment Variables에 같은 세 값 → Deploy.
 4. `https://<배포주소>/s/kim-lab`이 열리는지, 편집기는 `https://<배포주소>/editor/site_kimlab?key=<EDITOR_KEY>`로 열리는지 확인한다.
 
