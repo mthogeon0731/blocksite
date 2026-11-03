@@ -1,6 +1,6 @@
 # 블록 홈페이지 (시제품)
 
-코딩·디자인을 모르는 사람이 블록을 골라 홈페이지를 만들고, 바뀌는 결과를 실시간으로 보면서 완성하는 웹 툴. AI/LLM 호출 없음, 정해진 규칙으로만 동작. 블록 구성은 무료, 기능 연결(공지 올리기·사진 올리기)부터 유료(시제품은 가짜 결제). 스펙은 [SPEC.md](SPEC.md)(시제품)와 [GRID_SPEC.md](GRID_SPEC.md)(그리드 개편, 브랜치 `grid-layout` — 충돌하면 GRID_SPEC이 우선).
+코딩·디자인을 모르는 사람이 블록을 골라 홈페이지를 만들고, 바뀌는 결과를 실시간으로 보면서 완성하는 웹 툴. AI/LLM 호출 없음, 정해진 규칙으로만 동작. 블록 구성은 무료, 기능 연결(공지 올리기·사진 올리기)부터 유료(시제품은 가짜 결제). 스펙은 [SPEC.md](SPEC.md)(시제품)와 [GRID_SPEC.md](GRID_SPEC.md)(그리드 개편, 2026-11-03 master·프로덕션 반영 — 충돌하면 GRID_SPEC이 우선).
 
 그리드 개편: 페이지 뒤판이 가로 48칸 모눈판이다. 블록은 칸 단위 `(x, y, w, h)`라서 판 어디에나 놓고, 끌어서 옮기고, 가장자리를 끌어 크기를 바꾼다. 겹치면 겹친 블록이 아래로 밀린다. 블록 안쪽은 정해진 선택지(바탕·모서리·여백·사진 모양 등)와 부품 정렬·숨기기로 조정한다.
 
@@ -26,7 +26,7 @@ npm run dev
 
 - `EDITOR_KEY`: 설정하면 편집기와 쓰기 API가 쿠키를 확인한다. 편집기를 `/editor/site_kimlab?key=값`으로 한 번 열면 쿠키가 저장된다. 로컬에서는 비워 둬도 된다. **배포할 때는 꼭 설정한다.**
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: 둘 다 있으면 Supabase를 쓴다(아래 "배포"). 없으면 로컬 파일 저장소. URL은 `https://<ref>.supabase.co`까지만(뒤에 `/rest/v1/`이 붙으면 안 된다). 키는 새 형식 `sb_secret_…`도 된다.
-- **`grid-layout` 브랜치 작업 중**: `.env.local`에 프로덕션 Supabase 값이 있으면 개편 코드가 그 DB에 v2 config를 써서 master 배포본(v1 코드)의 그 사이트가 깨진다. 그래서 `.env.development.local`(git 제외)에 위 두 값과 `EDITOR_KEY`를 **빈 값**으로 두어 `npm run dev`만 로컬 저장소·편집 키 없음으로 돌린다. 이 파일을 지우면 `.env.local` 설정으로 돌아간다. `next build`·배포에는 영향이 없다.
+- `.env.development.local`(선택, git 제외): 위 두 값과 `EDITOR_KEY`를 **빈 값**으로 두면 `npm run dev`만 로컬 저장소·편집 키 없음으로 돈다. 프로덕션 DB와 떼어 놓고 개발·시연할 때 쓴다(개발 PC에는 이렇게 되어 있다). 지우면 `.env.local` 설정(프로덕션 Supabase)으로 돈다. `next build`·배포에는 영향이 없다.
 
 ## 데모 순서 (심사 시연, 3분 — GRID_SPEC 11.4)
 
@@ -63,24 +63,21 @@ npm run dev
 - [x] `check-rules.mjs` 전부 통과 (42건, 로컬 저장소)
 - [x] 1440px에서 편집기 미리보기 = 공개 페이지 (블록 크기·위치 동일)
 - [x] 375px 가로 스크롤 0, 900px 겹침 0
-- [x] 배포 DB의 기존 v1 사이트가 v2로 열림 (프로덕션 config 사본으로 확인 + preview에서 읽기 확인, 공지·사진 테이블은 손대지 않음)
+- [x] 배포 DB의 기존 v1 사이트가 v2로 열림 (사본·preview 읽기 확인 → 프로덕션 반영 후 편집기로 한 번 열어 v2 저장, 공지·사진 테이블은 손대지 않음)
 - [x] 되돌리기·다시 하기 동작, 기능 연결 상태는 되돌려지지 않음
 - [x] `SPEC.md` 충돌 절에 주석, README·개발기록 갱신
 - [x] `grep -ri "openai\|anthropic\|gemini" src/` 0건
 
-서버 검증 점검(서버 켜고): `node scripts/check-rules.mjs` — 판 규칙·스키마 16건, 연결·공지 11건, 사진 13건, v1 → v2 변환 2건 = 42건. 점검용 사이트 `site_check`만 쓰고 시드 사이트는 건드리지 않는다. Supabase 모드에서는 site_check를 v2로 쓰므로 그 DB를 읽는 배포본이 v2 코드일 때만 돌린다.
+서버 검증 점검(서버 켜고): `node scripts/check-rules.mjs` — 판 규칙·스키마 16건, 연결·공지 11건, 사진 13건, v1 → v2 변환 2건 = 42건(로컬 저장소). Supabase 모드는 v1 변환을 읽기 전용 1건으로 대신해 41건(2026-11-03 프로덕션 DB로 통과). 점검용 사이트 `site_check`만 쓰고 시드 사이트는 건드리지 않는다. Supabase 모드는 그 DB를 읽는 배포본이 v2 코드일 때만 돌린다. 편집 키(`EDITOR_KEY`)가 설정된 서버에서는 쓰기가 막히므로, 점검할 때는 `.env.development.local`에 `EDITOR_KEY=`만 두고 `npm run dev`를 켠다.
 
 판 규칙·되돌리기 단위 확인(서버 불필요): `node --test scripts/grid.test.mjs` — resolve(밀어내기)·빈 줄 정리·빈 자리 찾기·위로 붙이기·v1 변환·손잡이 크기 조절·되돌리기(묶기·연결 유지·데이터 보호)·부품 설정 12건.
 
 ## 배포 (Vercel + Supabase)
 
-**프로덕션 (master, 그리드 개편 전)**: https://blocksite-seven.vercel.app — 공개 페이지 `/s/kim-lab`, 편집기 `/editor/site_kimlab?key=<EDITOR_KEY>`. Vercel 프로젝트 `blocksite`(계정 hogeon), Supabase 모드. 환경변수는 Vercel 프로젝트에 들어 있다(`npx vercel env ls`). `.vercelignore`가 `legacy/`, `.data/`, `.env*`를 업로드에서 뺀다.
-
-**그리드 개편 preview (`grid-layout`, 2026-11-03)**: https://blocksite-7wr5s0tzp-hogeon.vercel.app — 다시 올리려면 이 브랜치 폴더에서 `npx vercel deploy --yes`(`--prod` 없이). Preview 환경에도 같은 환경변수 3개가 있고 **프로덕션과 같은 Supabase DB**를 쓴다.
-- preview 편집기에서는 **새 사이트로만** 편집한다(예: `/editor/grid-demo?key=<EDITOR_KEY>`). 기존 사이트(`/editor/site_kimlab`)를 preview 편집기로 열면 자동 높이 맞춤이 곧바로 v2로 저장해 프로덕션의 `/s/kim-lab`이 깨진다. 공개 페이지(`/s/kim-lab`)는 읽기만 하므로 열어도 된다.
-- preview 주소는 Vercel 로그인이 필요하다(프로젝트의 Deployment Protection). 다른 사람에게 보여 주려면 Vercel 대시보드에서 그 배포의 공유 링크를 만든다. CLI로는 `npx vercel curl <주소>`로 확인할 수 있다.
-
-**프로덕션 반영 (지시가 있을 때만)**: `grid-layout`을 master에 병합 → `npx vercel deploy --prod --yes` → 프로덕션 편집기로 기존 사이트를 한 번 열어 높이를 맞춘다(v2로 저장). 그 뒤에는 옛 버전으로 되돌리면 v2로 저장된 사이트가 깨진다.
+**프로덕션 (그리드 개편, 2026-11-03 반영)**: https://blocksite-seven.vercel.app — 공개 페이지 `/s/kim-lab`, 편집기 `/editor/site_kimlab?key=<EDITOR_KEY>`. Vercel 프로젝트 `blocksite`(계정 hogeon), Supabase 모드. 다시 배포하려면 master에서 `npx vercel deploy --prod --yes`(Vercel CLI 로그인 필요). 환경변수는 Vercel 프로젝트의 Production·Preview에 들어 있다(`npx vercel env ls`). `.vercelignore`가 `legacy/`, `.data/`, `.env*`를 업로드에서 뺀다.
+- 반영 순서(완료): `grid-layout`을 master로 fast-forward → `npx vercel deploy --prod --yes` → 공개 페이지·API 읽기 확인 → Supabase 모드 check-rules 41건 통과(점검용 사이트만 씀, D는 읽기 전용) → 기존 사이트를 편집기로 한 번 열어 자동 높이 맞춤 → v2로 저장 → 1440px에서 모든 블록이 칸에 맞음.
+- **되돌리기 주의**: 이제 DB의 사이트가 v2로 저장되어 있어, 개편 전 코드(`e114207`)로 다시 배포하면 그 사이트가 열리지 않는다.
+- 반영 전 확인용 preview: https://blocksite-7wr5s0tzp-hogeon.vercel.app (같은 코드·같은 DB, Vercel 로그인 필요. `npx vercel curl <주소>`로도 확인 가능).
 
 처음부터 새로 배포하는 경우(로컬 파일 저장소는 Vercel에서 쓸 수 없으므로 Supabase가 필요하다):
 
