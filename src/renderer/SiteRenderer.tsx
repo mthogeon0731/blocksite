@@ -103,7 +103,7 @@ function BlockFrame({ id, slot, config, data, mode, edit }: RenderProps & { id: 
       }}
     >
       {selected && (
-        <div className="absolute -top-9 right-0 z-10" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute -top-9 left-0 z-10" onClick={(e) => e.stopPropagation()}>
           {edit.toolbar(id, slot)}
         </div>
       )}
