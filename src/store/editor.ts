@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { Block, BlockData, BlockType, Notice, SiteConfig, Slot, Theme } from '@/lib/schema';
+import type { Block, BlockData, BlockType, Notice, Photo, SiteConfig, Slot, Theme } from '@/lib/schema';
 import { newBlock } from '@/lib/catalog';
 import { canPlace, findSlotOf } from '@/lib/slots';
 
@@ -10,6 +10,9 @@ export type SaveState =
   | { kind: 'saving' }
   | { kind: 'saved'; at: string }
   | { kind: 'error'; message: string };
+
+export type DataKind = 'notices' | 'photos';
+type ItemOf<K extends DataKind> = K extends 'notices' ? Notice : Photo;
 
 export interface EditorState {
   config: SiteConfig;
@@ -28,9 +31,9 @@ export interface EditorState {
   moveToSlot: (id: string, slot: Slot) => string | null; // 실패하면 이유
   updateProps: (id: string, patch: Partial<Block['props']>) => void;
   connectBlock: (id: string) => void; // 서버가 연결을 확인한 뒤 로컬 상태 반영
-  setNotices: (blockId: string, list: Notice[]) => void;
-  addNotice: (blockId: string, notice: Notice) => void;
-  removeNotice: (blockId: string, noticeId: string) => void;
+  setList: <K extends DataKind>(kind: K, blockId: string, list: ItemOf<K>[]) => void;
+  addItem: <K extends DataKind>(kind: K, blockId: string, item: ItemOf<K>) => void;
+  removeItem: (kind: DataKind, blockId: string, id: string) => void;
   setTheme: (patch: Partial<Theme>) => void;
   setTitle: (title: string) => void;
   setSaveState: (s: SaveState) => void;
@@ -39,6 +42,9 @@ export interface EditorState {
 
 const withoutId = (slots: SiteConfig['slots'], id: string) =>
   Object.fromEntries(Object.entries(slots).map(([k, ids]) => [k, ids.filter((x) => x !== id)])) as SiteConfig['slots'];
+
+const withList = (data: BlockData, kind: DataKind, blockId: string, list: Notice[] | Photo[]): BlockData =>
+  ({ ...data, [kind]: { ...data[kind], [blockId]: list } }) as BlockData;
 
 // 편집기 인스턴스마다 스토어 하나 (Editor.tsx가 만들어 Context로 내려준다)
 export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
@@ -124,17 +130,12 @@ export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
         return { config: { ...s.config, blocks: { ...s.config.blocks, [id]: next } } };
       }),
 
-    setNotices: (blockId, list) => set((s) => ({ data: { ...s.data, notices: { ...s.data.notices, [blockId]: list } } })),
-    addNotice: (blockId, notice) =>
+    setList: (kind, blockId, list) => set((s) => ({ data: withList(s.data, kind, blockId, list as Notice[] | Photo[]) })),
+    addItem: (kind, blockId, item) =>
+      set((s) => ({ data: withList(s.data, kind, blockId, [item, ...(s.data[kind]?.[blockId] ?? [])] as Notice[] | Photo[]) })),
+    removeItem: (kind, blockId, id) =>
       set((s) => ({
-        data: { ...s.data, notices: { ...s.data.notices, [blockId]: [notice, ...(s.data.notices?.[blockId] ?? [])] } },
-      })),
-    removeNotice: (blockId, noticeId) =>
-      set((s) => ({
-        data: {
-          ...s.data,
-          notices: { ...s.data.notices, [blockId]: (s.data.notices?.[blockId] ?? []).filter((n) => n.id !== noticeId) },
-        },
+        data: withList(s.data, kind, blockId, (s.data[kind]?.[blockId] ?? []).filter((x) => x.id !== id) as Notice[] | Photo[]),
       })),
 
     setTheme: (patch) => set((s) => ({ config: { ...s.config, theme: { ...s.config.theme, ...patch } } })),

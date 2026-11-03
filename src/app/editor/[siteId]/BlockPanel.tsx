@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { CATALOG } from '@/lib/catalog';
-import type { Block, Notice, PropsOf } from '@/lib/schema';
+import type { Block, Notice, Photo, PropsOf } from '@/lib/schema';
 import { useEditor } from '@/store/editor';
 import { PayModal } from './PayModal';
 
@@ -10,7 +10,8 @@ const input = 'w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm
 const select = 'rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none';
 const btn = 'rounded-md border border-neutral-200 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50';
 const primary = 'rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60';
-const EMPTY: Notice[] = [];
+const EMPTY_NOTICES: Notice[] = [];
+const EMPTY_PHOTOS: Photo[] = [];
 
 export function BlockPanel() {
   const id = useEditor((s) => s.selectedBlockId);
@@ -36,7 +37,7 @@ export function BlockPanel() {
           block.type === 'notices' ? (
             <NoticesManager blockId={id} />
           ) : (
-            <p className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-500">사진 올리기는 3단계(11/5)에서 추가돼요.</p>
+            <PhotosManager blockId={id} />
           )
         ) : (
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -249,9 +250,9 @@ function PhotosForm({ props, update }: { props: PropsOf<'photos'>; update: Updat
 
 function NoticesManager({ blockId }: { blockId: string }) {
   const siteId = useEditor((s) => s.config.siteId);
-  const list = useEditor((s) => s.data.notices?.[blockId] ?? EMPTY);
-  const addNotice = useEditor((s) => s.addNotice);
-  const removeNotice = useEditor((s) => s.removeNotice);
+  const list = useEditor((s) => s.data.notices?.[blockId] ?? EMPTY_NOTICES);
+  const addItem = useEditor((s) => s.addItem);
+  const removeItem = useEditor((s) => s.removeItem);
   const showToast = useEditor((s) => s.showToast);
   const [busy, setBusy] = useState(false);
 
@@ -268,7 +269,7 @@ function NoticesManager({ blockId }: { blockId: string }) {
       });
       const json = (await res.json()) as Notice & { error?: string };
       if (!res.ok) throw new Error(json.error ?? '공지를 올리지 못했어요');
-      addNotice(blockId, json); // 목록과 미리보기 즉시 갱신
+      addItem('notices', blockId, json); // 목록과 미리보기 즉시 갱신
       form.reset();
       showToast('공지를 올렸어요');
     } catch (err) {
@@ -285,7 +286,7 @@ function NoticesManager({ blockId }: { blockId: string }) {
       showToast(json.error ?? '공지를 지우지 못했어요');
       return;
     }
-    removeNotice(blockId, noticeId);
+    removeItem('notices', blockId, noticeId);
   }
 
   return (
@@ -312,6 +313,88 @@ function NoticesManager({ blockId }: { blockId: string }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// ---------- 연결된 사진 블록의 콘텐츠 관리 ----------
+
+function PhotosManager({ blockId }: { blockId: string }) {
+  const siteId = useEditor((s) => s.config.siteId);
+  const list = useEditor((s) => s.data.photos?.[blockId] ?? EMPTY_PHOTOS);
+  const addItem = useEditor((s) => s.addItem);
+  const removeItem = useEditor((s) => s.removeItem);
+  const showToast = useEditor((s) => s.showToast);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form); // file, caption
+    fd.append('siteId', siteId);
+    fd.append('blockId', blockId);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/photos', { method: 'POST', body: fd });
+      const json = (await res.json()) as Photo & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? '사진을 올리지 못했어요');
+      addItem('photos', blockId, json); // 썸네일과 미리보기 즉시 갱신
+      form.reset();
+      showToast('사진을 올렸어요');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '사진을 올리지 못했어요');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(photoId: string) {
+    const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const json: { error?: string } = await res.json().catch(() => ({}));
+      showToast(json.error ?? '사진을 지우지 못했어요');
+      return;
+    }
+    removeItem('photos', blockId, photoId);
+  }
+
+  return (
+    <section className="space-y-3 rounded-lg border border-neutral-200 p-3">
+      <h3 className="font-semibold">사진 올리기</h3>
+      <form onSubmit={submit} className="space-y-2">
+        <input
+          type="file"
+          name="file"
+          required
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="block w-full text-xs text-neutral-600 file:mr-2 file:rounded-md file:border-0 file:bg-neutral-100 file:px-2.5 file:py-1.5 file:text-xs file:font-medium hover:file:bg-neutral-200"
+        />
+        <input name="caption" maxLength={200} placeholder="설명 (선택)" className={input} />
+        <button type="submit" disabled={busy} className={`${primary} w-full`}>
+          {busy ? '올리는 중…' : '사진 올리기'}
+        </button>
+      </form>
+      <p className="text-[11px] text-neutral-400">JPG·PNG·GIF·WEBP, 10MB까지</p>
+      {list.length === 0 ? (
+        <p className="text-xs text-neutral-400">아직 올린 사진이 없어요</p>
+      ) : (
+        <ul className="grid grid-cols-3 gap-2">
+          {list.map((p) => (
+            <li key={p.id} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={p.caption || '사진'} className="aspect-square w-full rounded-md bg-neutral-100 object-cover" />
+              <button
+                type="button"
+                onClick={() => void remove(p.id)}
+                className="absolute right-1 top-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white hover:bg-red-600"
+              >
+                삭제
+              </button>
+              {p.caption && <p className="mt-0.5 truncate text-[11px] text-neutral-500">{p.caption}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

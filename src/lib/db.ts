@@ -1,33 +1,49 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import type { BlockData, Notice, NoticeInput, SiteConfig } from './schema';
+import type { BlockData, Notice, NoticeInput, Photo, SiteConfig } from './schema';
 import { SEED_SITE } from './seed';
 
-// ponytail: 로컬 JSON 파일 저장소. Supabase 키가 생기면 이 파일의 export만 supabase-js로 교체한다
-// (스키마는 supabase/migrations/0001_init.sql). 단일 프로세스 가정, 인스턴스가 여럿이면 DB로.
+// ponytail: 로컬 JSON 파일 저장소 + 로컬 업로드 폴더. Supabase 키가 생기면 이 파일의 export만 supabase-js로 교체한다
+// (스키마는 supabase/migrations/0001_init.sql, 사진은 Storage 버킷 photos). 단일 프로세스 가정, 인스턴스가 여럿이면 DB로.
 const FILE = path.join(process.cwd(), '.data', 'db.json');
+export const UPLOAD_DIR = path.join(process.cwd(), '.data', 'uploads');
 
-// R3: 공지는 site_id + block_id로만 묶인다. 위치 정보 없음.
+// R3: 공지·사진은 site_id + block_id로만 묶인다. 위치 정보 없음.
 interface StoredNotice extends Notice {
   site_id: string;
   block_id: string;
 }
+interface StoredPhoto {
+  id: string;
+  site_id: string;
+  block_id: string;
+  storage_path: string; // {site_id}/{block_id}/{uuid}.{ext}
+  caption: string;
+  created_at: string;
+}
 type Db = {
   sites: Record<string, { config: SiteConfig; updated_at: string }>;
   notices: StoredNotice[];
+  photos: StoredPhoto[];
 };
 type Fail = { error: string; status: number };
 
 const now = () => new Date().toISOString();
-const pub = ({ id, title, body, created_at }: StoredNotice): Notice => ({ id, title, body, created_at });
+const byNewest = <T extends { created_at: string }>(a: T, b: T) => b.created_at.localeCompare(a.created_at);
+const pubNotice = ({ id, title, body, created_at }: StoredNotice): Notice => ({ id, title, body, created_at });
+const pubPhoto = ({ id, storage_path, caption }: StoredPhoto): Photo => ({ id, url: `/uploads/${storage_path}`, caption });
+const noticesOf = (db: Db, siteId: string, blockId: string) =>
+  db.notices.filter((n) => n.site_id === siteId && n.block_id === blockId).sort(byNewest).map(pubNotice);
+const photosOf = (db: Db, siteId: string, blockId: string) =>
+  db.photos.filter((p) => p.site_id === siteId && p.block_id === blockId).sort(byNewest).map(pubPhoto);
 
 async function load(): Promise<Db> {
   try {
     const db = JSON.parse(await fs.readFile(FILE, 'utf8')) as Partial<Db>;
-    return { sites: db.sites ?? {}, notices: db.notices ?? [] };
+    return { sites: db.sites ?? {}, notices: db.notices ?? [], photos: db.photos ?? [] };
   } catch {
-    const db: Db = { sites: { [SEED_SITE.siteId]: { config: SEED_SITE, updated_at: now() } }, notices: [] };
+    const db: Db = { sites: { [SEED_SITE.siteId]: { config: SEED_SITE, updated_at: now() } }, notices: [], photos: [] };
     await save(db);
     return db;
   }
@@ -42,10 +58,10 @@ async function save(db: Db) {
 
 // 쓰기(읽고-고치고-저장)를 한 번에 하나씩. 자동 저장 PUT과 연결 POST가 겹쳐도 서로 덮어쓰지 않는다.
 let chain: Promise<unknown> = Promise.resolve();
-function mutate<T>(fn: (db: Db) => T): Promise<T> {
+function mutate<T>(fn: (db: Db) => T | Promise<T>): Promise<T> {
   const run = chain.then(async () => {
     const db = await load();
-    const out = fn(db);
+    const out = await fn(db);
     await save(db);
     return out;
   });
@@ -71,10 +87,14 @@ export function putSite(config: SiteConfig): Promise<{ updatedAt: string } | Fai
       block.feature.connected = old && 'feature' in old ? old.feature.connected : false;
     }
     // 7절 7번: 데이터가 있는 블록은 지울 수 없다. 정식 버전 TODO: 데이터 보관 후 "이전 공지 n건을 연결할까요?"
-    const orphan = db.notices.find((n) => n.site_id === config.siteId && !(n.block_id in config.blocks));
-    if (orphan) {
-      const count = db.notices.filter((n) => n.site_id === config.siteId && n.block_id === orphan.block_id).length;
-      return { error: `이 블록에 공지 ${count}건이 있어요. 시제품에서는 데이터가 있는 블록을 삭제할 수 없어요.`, status: 400 };
+    for (const [kind, rows, unit] of [
+      ['공지', db.notices, '건'],
+      ['사진', db.photos, '장'],
+    ] as const) {
+      const orphan = rows.find((r) => r.site_id === config.siteId && !(r.block_id in config.blocks));
+      if (!orphan) continue;
+      const count = rows.filter((r) => r.site_id === config.siteId && r.block_id === orphan.block_id).length;
+      return { error: `이 블록에 ${kind} ${count}${unit}이 있어요. 시제품에서는 데이터가 있는 블록을 삭제할 수 없어요.`, status: 400 };
     }
     const updatedAt = now();
     db.sites[config.siteId] = { config, updated_at: updatedAt };
@@ -94,11 +114,10 @@ export function connectBlock(siteId: string, blockId: string): Promise<{ ok: tru
   });
 }
 
+// ---------- 공지 ----------
+
 export async function listNotices(siteId: string, blockId: string): Promise<Notice[]> {
-  return (await load()).notices
-    .filter((n) => n.site_id === siteId && n.block_id === blockId)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map(pub);
+  return noticesOf(await load(), siteId, blockId);
 }
 
 export function addNotice(input: NoticeInput): Promise<Notice | Fail> {
@@ -117,7 +136,7 @@ export function addNotice(input: NoticeInput): Promise<Notice | Fail> {
       created_at: now(),
     };
     db.notices.push(row);
-    return pub(row);
+    return pubNotice(row);
   });
 }
 
@@ -130,11 +149,51 @@ export function deleteNotice(id: string): Promise<boolean> {
   });
 }
 
+// ---------- 사진 ----------
+
+export async function listPhotos(siteId: string, blockId: string): Promise<Photo[]> {
+  return photosOf(await load(), siteId, blockId);
+}
+
+export function addPhoto(input: { siteId: string; blockId: string; caption: string; ext: string; bytes: Buffer }): Promise<Photo | Fail> {
+  return mutate(async (db) => {
+    const site = db.sites[input.siteId];
+    if (!site) return { error: '사이트를 찾을 수 없어요', status: 404 };
+    const block = site.config.blocks[input.blockId];
+    if (!block || block.type !== 'photos') return { error: '사진 블록이 아니에요', status: 400 };
+    if (!block.feature.connected) return { error: '사진 올리기 기능이 아직 연결되지 않았어요', status: 403 };
+    const id = randomUUID();
+    const storage_path = `${input.siteId}/${input.blockId}/${id}.${input.ext}`;
+    const full = path.join(UPLOAD_DIR, storage_path);
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, input.bytes);
+    const row: StoredPhoto = { id, site_id: input.siteId, block_id: input.blockId, storage_path, caption: input.caption, created_at: now() };
+    db.photos.push(row);
+    return pubPhoto(row);
+  });
+}
+
+// 행을 지우고 파일도 지운다. 없으면 false.
+export async function deletePhoto(id: string): Promise<boolean> {
+  const storagePath = await mutate((db) => {
+    const i = db.photos.findIndex((p) => p.id === id);
+    if (i < 0) return null;
+    const [row] = db.photos.splice(i, 1);
+    return row.storage_path;
+  });
+  if (!storagePath) return false;
+  await fs.unlink(path.join(UPLOAD_DIR, storagePath)).catch(() => undefined);
+  return true;
+}
+
 // 연결된 블록의 데이터를 blockId 기준으로 모은다. 편집기·공개 페이지가 렌더러에 넣어 준다.
 export async function loadBlockData(config: SiteConfig): Promise<BlockData> {
+  const db = await load();
   const notices: Record<string, Notice[]> = {};
+  const photos: Record<string, Photo[]> = {};
   for (const [id, block] of Object.entries(config.blocks)) {
-    if (block.type === 'notices' && block.feature.connected) notices[id] = await listNotices(config.siteId, id);
+    if (block.type === 'notices' && block.feature.connected) notices[id] = noticesOf(db, config.siteId, id);
+    if (block.type === 'photos' && block.feature.connected) photos[id] = photosOf(db, config.siteId, id);
   }
-  return { notices };
+  return { notices, photos };
 }

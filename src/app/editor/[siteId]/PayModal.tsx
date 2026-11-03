@@ -10,7 +10,7 @@ export function PayModal({ blockId, onClose }: { blockId: string; onClose: () =>
   const siteId = useEditor((s) => s.config.siteId);
   const block = useEditor((s) => s.config.blocks[blockId]);
   const connectBlock = useEditor((s) => s.connectBlock);
-  const setNotices = useEditor((s) => s.setNotices);
+  const setList = useEditor((s) => s.setList);
   const showToast = useEditor((s) => s.showToast);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,11 +19,11 @@ export function PayModal({ blockId, onClose }: { blockId: string; onClose: () =>
     ref.current?.showModal();
   }, []);
 
-  if (!block) return null;
+  if (!block || !('feature' in block)) return null;
   const def = CATALOG[block.type];
   const feature = def.feature;
   if (!feature) return null;
-  const type = block.type;
+  const type = block.type; // 'notices' | 'photos'
 
   async function pay() {
     setPaying(true);
@@ -39,7 +39,7 @@ export function PayModal({ blockId, onClose }: { blockId: string; onClose: () =>
       const json: { error?: string } = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? '연결하지 못했어요');
       connectBlock(blockId);
-      if (type === 'notices') setNotices(blockId, []);
+      setList(type, blockId, []); // 새로 연결된 블록은 빈 목록에서 시작
       showToast(type === 'notices' ? '연결됐어요. 이제 공지를 올릴 수 있어요' : '연결됐어요. 이제 사진을 올릴 수 있어요');
       ref.current?.close(); // → onClose
     } catch (e) {

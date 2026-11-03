@@ -170,6 +170,7 @@ const tb = 'rounded px-2 py-1 hover:bg-neutral-100 disabled:opacity-30 disabled:
 function Toolbar({ id, slot }: { id: string; slot: Slot }) {
   const config = useEditor((s) => s.config);
   const noticeCount = useEditor((s) => s.data.notices?.[id]?.length ?? 0);
+  const photoCount = useEditor((s) => s.data.photos?.[id]?.length ?? 0);
   const moveBlock = useEditor((s) => s.moveBlock);
   const moveToSlot = useEditor((s) => s.moveToSlot);
   const removeBlock = useEditor((s) => s.removeBlock);
@@ -181,8 +182,9 @@ function Toolbar({ id, slot }: { id: string; slot: Slot }) {
 
   // 7절 7번: 데이터가 있는 블록은 시제품에서 삭제하지 않는다 (서버도 거부한다)
   const remove = () => {
-    if (noticeCount > 0) {
-      window.alert(`이 블록에 공지 ${noticeCount}건이 있어요. 시제품에서는 데이터가 있는 블록을 삭제할 수 없어요.`);
+    const has = noticeCount > 0 ? `공지 ${noticeCount}건` : photoCount > 0 ? `사진 ${photoCount}장` : null;
+    if (has) {
+      window.alert(`이 블록에 ${has}이 있어요. 시제품에서는 데이터가 있는 블록을 삭제할 수 없어요.`);
       return;
     }
     removeBlock(id);
