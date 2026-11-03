@@ -22,13 +22,24 @@ npm run dev
 
 Supabase 변수는 아직 쓰지 않는다. 키가 생기면 `src/lib/db.ts`의 함수 3개를 supabase-js로 교체하고 `supabase/migrations/0001_init.sql`, `supabase/seed.sql`을 적용한다.
 
-## 1단계(11/3) 확인 순서
+## 확인 순서
 
+1단계(11/3)
 1. `/editor/site_kimlab` → 공지사항 블록 클릭 → 툴바 "다른 자리로 ▾" → 왼쪽 자리로.
 2. 상단 "자동 저장됨 HH:MM" 확인 → 새로고침 → 블록이 왼쪽에 그대로.
 3. "공개 페이지 보기" → 같은 배치로 보인다.
 4. 왼쪽 "블록 고르기"에서 안 되는 조합은 카드가 흐려지고 이유가 보인다.
 5. 오른쪽 "스타일" 탭에서 색·글꼴·글자 크기 → 미리보기 즉시 반영.
+
+2단계(11/4)
+1. 공지사항 블록 클릭 → 오른쪽 "블록" 탭에 제목·개수 폼과 "기능 연결 (유료)" 카드.
+2. 기능 연결 → 결제 모달 → "결제하고 연결하기" → 1초 뒤 토스트 "연결됐어요" → 배지 사라짐.
+3. 같은 탭의 "공지 올리기" 폼으로 공지 2건 작성 → 미리보기와 목록에 즉시 표시.
+4. 블록을 왼쪽 자리로 이동 → 새로고침 → 공지가 그대로 따라온다 (블록 id에 묶여 있음).
+5. 공개 페이지에 공지가 최신순으로 보인다.
+6. 공지가 있는 블록의 "삭제" → 확인창으로 막힘 (서버도 400).
+
+API 점검(서버 켜고): `node scripts/check-rules.mjs` — 규칙표·스키마 9건 + 연결·공지 흐름 11건.
 
 ## 구조
 
@@ -41,14 +52,17 @@ src/lib/seed.ts          시드 사이트, 빈 사이트
 src/lib/db.ts            저장소(로컬 JSON 파일)
 src/renderer/            SiteRenderer (config, data, mode) → UI, blocks/ 6개
 src/store/editor.ts      zustand 편집기 스토어
-src/app/editor/[siteId]  편집기 (3단)
+src/app/editor/[siteId]  편집기 (3단): Editor·BlockPicker·SidePanel·BlockPanel(props 폼·공지 관리)·PayModal
 src/app/s/[slug]         공개 페이지
-src/app/api/sites/[id]   GET/PUT config
+src/app/api/sites/[id]   GET/PUT config, connect/ POST 기능 연결
+src/app/api/notices      GET/POST, [id]/ DELETE
 supabase/                마이그레이션·시드 SQL (Supabase 전환용)
 legacy/                  교수님 홈페이지 정적 미리보기 (참고용)
 ```
 
-## 알려진 제한 (1단계)
+## 알려진 제한 (2단계까지)
 
-- 블록 내용 편집 폼, 기능 연결(결제 모달), 공지·사진 API는 2·3단계.
+- 사진 업로드(연결 후 콘텐츠 관리), 내보내기는 3단계.
+- 결제는 가짜다(1초 스피너 → 연결). `// TODO: PG 연동 지점` 주석 위치: `PayModal.tsx`, `api/sites/[id]/connect/route.ts`.
+- 연결은 되돌릴 수 없고, 공지가 있는 블록은 삭제할 수 없다(정식 버전에서 데이터 보관 후 재연결).
 - 로컬 파일 저장소라 Vercel 등 배포 환경에서는 DB(Supabase)가 필요하다.

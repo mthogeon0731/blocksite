@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import { createStore, useStore } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { BlockType, SiteConfig, Slot, Theme } from '@/lib/schema';
+import type { Block, BlockData, BlockType, Notice, SiteConfig, Slot, Theme } from '@/lib/schema';
 import { newBlock } from '@/lib/catalog';
 import { canPlace, findSlotOf } from '@/lib/slots';
 
@@ -13,10 +13,12 @@ export type SaveState =
 
 export interface EditorState {
   config: SiteConfig;
+  data: BlockData; // 연결된 블록의 공지·사진. blockId 기준이라 블록을 옮겨도 그대로 (R3)
   selectedBlockId: string | null;
   selectedSlot: Slot | null;
   panelTab: 'style' | 'block';
   saveState: SaveState;
+  toast: string | null;
   selectBlock: (id: string, slot: Slot) => void;
   selectSlot: (slot: Slot | null) => void;
   setPanelTab: (tab: 'style' | 'block') => void;
@@ -24,22 +26,31 @@ export interface EditorState {
   removeBlock: (id: string) => void;
   moveBlock: (id: string, dir: 'up' | 'down') => void;
   moveToSlot: (id: string, slot: Slot) => string | null; // 실패하면 이유
+  updateProps: (id: string, patch: Partial<Block['props']>) => void;
+  connectBlock: (id: string) => void; // 서버가 연결을 확인한 뒤 로컬 상태 반영
+  setNotices: (blockId: string, list: Notice[]) => void;
+  addNotice: (blockId: string, notice: Notice) => void;
+  removeNotice: (blockId: string, noticeId: string) => void;
   setTheme: (patch: Partial<Theme>) => void;
   setTitle: (title: string) => void;
   setSaveState: (s: SaveState) => void;
+  showToast: (message: string) => void;
 }
 
 const withoutId = (slots: SiteConfig['slots'], id: string) =>
   Object.fromEntries(Object.entries(slots).map(([k, ids]) => [k, ids.filter((x) => x !== id)])) as SiteConfig['slots'];
 
 // 편집기 인스턴스마다 스토어 하나 (Editor.tsx가 만들어 Context로 내려준다)
-export function createEditorStore(initial: SiteConfig) {
+export function createEditorStore(initial: SiteConfig, initialData: BlockData) {
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
   return createStore<EditorState>()((set, get) => ({
     config: initial,
+    data: initialData,
     selectedBlockId: null,
     selectedSlot: null,
     panelTab: 'style',
     saveState: { kind: 'idle' },
+    toast: null,
 
     selectBlock: (id, slot) => set({ selectedBlockId: id, selectedSlot: slot, panelTab: 'block' }),
     selectSlot: (slot) => set({ selectedSlot: slot, selectedBlockId: null }),
@@ -97,9 +108,44 @@ export function createEditorStore(initial: SiteConfig) {
       return null;
     },
 
+    updateProps: (id, patch) =>
+      set((s) => {
+        const block = s.config.blocks[id];
+        if (!block) return s;
+        const next = { ...block, props: { ...block.props, ...patch } } as Block;
+        return { config: { ...s.config, blocks: { ...s.config.blocks, [id]: next } } };
+      }),
+
+    connectBlock: (id) =>
+      set((s) => {
+        const block = s.config.blocks[id];
+        if (!block || !('feature' in block)) return s;
+        const next = { ...block, feature: { ...block.feature, connected: true } } as Block;
+        return { config: { ...s.config, blocks: { ...s.config.blocks, [id]: next } } };
+      }),
+
+    setNotices: (blockId, list) => set((s) => ({ data: { ...s.data, notices: { ...s.data.notices, [blockId]: list } } })),
+    addNotice: (blockId, notice) =>
+      set((s) => ({
+        data: { ...s.data, notices: { ...s.data.notices, [blockId]: [notice, ...(s.data.notices?.[blockId] ?? [])] } },
+      })),
+    removeNotice: (blockId, noticeId) =>
+      set((s) => ({
+        data: {
+          ...s.data,
+          notices: { ...s.data.notices, [blockId]: (s.data.notices?.[blockId] ?? []).filter((n) => n.id !== noticeId) },
+        },
+      })),
+
     setTheme: (patch) => set((s) => ({ config: { ...s.config, theme: { ...s.config.theme, ...patch } } })),
     setTitle: (title) => set((s) => ({ config: { ...s.config, title } })),
     setSaveState: (saveState) => set({ saveState }),
+
+    showToast: (message) => {
+      clearTimeout(toastTimer);
+      set({ toast: message });
+      toastTimer = setTimeout(() => set({ toast: null }), 3000);
+    },
   }));
 }
 

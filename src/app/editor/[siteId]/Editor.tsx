@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import type { SiteConfig, Slot } from '@/lib/schema';
+import type { BlockData, SiteConfig, Slot } from '@/lib/schema';
 import { SLOTS } from '@/lib/schema';
 import { SLOT_RULES, canPlace } from '@/lib/slots';
 import { SiteRenderer } from '@/renderer/SiteRenderer';
@@ -31,8 +31,8 @@ async function saveConfig(store: EditorStore) {
   }
 }
 
-export function Editor({ initial }: { initial: SiteConfig }) {
-  const [store] = useState(() => createEditorStore(initial));
+export function Editor({ initial, initialData }: { initial: SiteConfig; initialData: BlockData }) {
+  const [store] = useState(() => createEditorStore(initial, initialData));
 
   // ?key=… → 쿠키 (쓰기 API 보호용). 주소에서는 지운다.
   useEffect(() => {
@@ -67,6 +67,7 @@ export function Editor({ initial }: { initial: SiteConfig }) {
           <Preview />
           <SidePanel />
         </div>
+        <Toast />
       </div>
     </EditorStoreContext.Provider>
   );
@@ -139,6 +140,7 @@ function SaveStatus() {
 
 function Preview() {
   const config = useEditor((s) => s.config);
+  const data = useEditor((s) => s.data);
   const selectedBlockId = useEditor((s) => s.selectedBlockId);
   const selectedSlot = useEditor((s) => s.selectedSlot);
   const selectBlock = useEditor((s) => s.selectBlock);
@@ -148,7 +150,7 @@ function Preview() {
       <div className="mx-auto max-w-5xl rounded-xl bg-neutral-50 shadow-sm ring-1 ring-neutral-200">
         <SiteRenderer
           config={config}
-          data={{}}
+          data={data}
           mode="edit"
           edit={{
             selectedBlockId,
@@ -167,6 +169,7 @@ const tb = 'rounded px-2 py-1 hover:bg-neutral-100 disabled:opacity-30 disabled:
 
 function Toolbar({ id, slot }: { id: string; slot: Slot }) {
   const config = useEditor((s) => s.config);
+  const noticeCount = useEditor((s) => s.data.notices?.[id]?.length ?? 0);
   const moveBlock = useEditor((s) => s.moveBlock);
   const moveToSlot = useEditor((s) => s.moveToSlot);
   const removeBlock = useEditor((s) => s.removeBlock);
@@ -175,6 +178,16 @@ function Toolbar({ id, slot }: { id: string; slot: Slot }) {
   const ids = config.slots[slot];
   const index = ids.indexOf(id);
   const targets = SLOTS.filter((s) => s !== slot && canPlace(config, s, block.type, id).ok);
+
+  // 7절 7번: 데이터가 있는 블록은 시제품에서 삭제하지 않는다 (서버도 거부한다)
+  const remove = () => {
+    if (noticeCount > 0) {
+      window.alert(`이 블록에 공지 ${noticeCount}건이 있어요. 시제품에서는 데이터가 있는 블록을 삭제할 수 없어요.`);
+      return;
+    }
+    removeBlock(id);
+  };
+
   return (
     <div className="flex items-center gap-0.5 whitespace-nowrap rounded-md border border-neutral-200 bg-white p-1 text-xs text-neutral-700 shadow-sm">
       <button type="button" className={tb} disabled={index <= 0} onClick={() => moveBlock(id, 'up')}>
@@ -185,7 +198,7 @@ function Toolbar({ id, slot }: { id: string; slot: Slot }) {
       </button>
       <details className="relative">
         <summary className={`${tb} cursor-pointer select-none`}>다른 자리로 ▾</summary>
-        <ul className="absolute right-0 top-full z-20 mt-1 min-w-36 rounded-md border border-neutral-200 bg-white py-1 shadow-md">
+        <ul className="absolute left-0 top-full z-20 mt-1 min-w-36 rounded-md border border-neutral-200 bg-white py-1 shadow-md">
           {targets.length === 0 ? (
             <li className="px-3 py-1 text-neutral-400">옮길 수 있는 자리가 없어요</li>
           ) : (
@@ -199,9 +212,22 @@ function Toolbar({ id, slot }: { id: string; slot: Slot }) {
           )}
         </ul>
       </details>
-      <button type="button" className={`${tb} text-red-600`} onClick={() => removeBlock(id)}>
+      <button type="button" className={`${tb} text-red-600`} onClick={remove}>
         삭제
       </button>
+    </div>
+  );
+}
+
+function Toast() {
+  const toast = useEditor((s) => s.toast);
+  if (!toast) return null;
+  return (
+    <div
+      role="status"
+      className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-neutral-900 px-4 py-2 text-sm text-white shadow-lg"
+    >
+      {toast}
     </div>
   );
 }

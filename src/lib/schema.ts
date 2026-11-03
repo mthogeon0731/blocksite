@@ -81,3 +81,17 @@ export interface Photo {
   url: string;
   caption: string;
 }
+
+// blockId → 백엔드 데이터 (연결된 블록만 채워진다). 렌더러는 이것을 바깥에서 받는다 (R6).
+export interface BlockData {
+  notices?: Record<string, Notice[]>;
+  photos?: Record<string, Photo[]>;
+}
+
+export const NoticeInputSchema = z.object({
+  siteId: z.string().min(1),
+  blockId: z.string().min(1),
+  title: z.string().trim().min(1, '제목을 입력해 주세요').max(120, '제목은 120자까지예요'),
+  body: z.string().max(5000, '본문은 5000자까지예요').default(''),
+});
+export type NoticeInput = z.infer<typeof NoticeInputSchema>;

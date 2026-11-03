@@ -33,14 +33,8 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const sameSlug = await getSiteBySlug(config.slug);
   if (sameSlug && sameSlug.siteId !== id) return bad('이미 다른 사이트가 쓰는 주소(slug)예요');
 
-  // 기능 연결 상태는 PUT으로 바꿀 수 없다. 저장된 값을 유지한다 (연결은 POST /connect 전용, 2단계).
-  const prev = await getSite(id);
-  for (const [blockId, block] of Object.entries(config.blocks)) {
-    if (!('feature' in block)) continue;
-    const old = prev?.blocks[blockId];
-    block.feature.connected = old && 'feature' in old ? old.feature.connected : false;
-  }
-
-  const updatedAt = await putSite(config);
-  return NextResponse.json({ ok: true, updatedAt });
+  // 기능 연결 상태 유지와 "데이터 있는 블록 삭제 금지"는 저장소 안에서 처리한다 (db.putSite)
+  const result = await putSite(config);
+  if ('error' in result) return bad(result.error, result.status);
+  return NextResponse.json({ ok: true, updatedAt: result.updatedAt });
 }

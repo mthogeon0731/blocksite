@@ -1,8 +1,8 @@
 'use client';
 
-import { CATALOG } from '@/lib/catalog';
 import type { Theme } from '@/lib/schema';
 import { useEditor } from '@/store/editor';
+import { BlockPanel } from './BlockPanel';
 
 // 남색, 청록, 적색, 보라, 주황, 회색
 const PALETTE = ['#1E3A8A', '#236A65', '#B91C1C', '#6D28D9', '#C2410C', '#374151'];
@@ -104,44 +104,6 @@ function StylePanel() {
           ))}
         </div>
       </section>
-    </div>
-  );
-}
-
-function BlockPanel() {
-  const id = useEditor((s) => s.selectedBlockId);
-  const block = useEditor((s) => (s.selectedBlockId ? s.config.blocks[s.selectedBlockId] : undefined));
-  if (!id || !block) return <p className="text-sm text-neutral-500">미리보기에서 블록을 클릭하면 여기서 편집할 수 있어요.</p>;
-  const def = CATALOG[block.type];
-  const feature = 'feature' in block ? block.feature : undefined;
-  return (
-    <div className="space-y-4 text-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-xl">{def.icon}</span>
-        <div>
-          <p className="font-semibold">{def.label}</p>
-          <p className="text-xs text-neutral-400">블록 id {id} · 옮겨도 바뀌지 않아요</p>
-        </div>
-      </div>
-      <p className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-500">내용 편집 폼은 2단계(11/4)에서 추가돼요.</p>
-      {def.feature && feature && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <p className="font-medium text-amber-900">
-            {feature.connected ? `${def.feature.label} 기능이 연결되어 있어요` : `${def.feature.label} 기능이 아직 연결되지 않았어요`}
-          </p>
-          <p className="mt-1 text-xs text-amber-800">{def.feature.description}</p>
-          {!feature.connected && (
-            <button
-              type="button"
-              disabled
-              title="2단계에서 결제 모달이 붙어요"
-              className="mt-3 w-full rounded-md bg-amber-200/70 py-2 font-medium text-amber-900/60"
-            >
-              기능 연결 (유료)
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

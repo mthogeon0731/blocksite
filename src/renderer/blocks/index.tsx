@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Block, Notice, Photo, Theme } from '@/lib/schema';
+import type { Block, BlockData, Theme } from '@/lib/schema';
 import { NavBlock } from './NavBlock';
 import { ProfileBlock } from './ProfileBlock';
 import { TextBlock } from './TextBlock';
@@ -21,11 +21,7 @@ export interface BlockProps<P, D = undefined> extends BlockCtx {
   connected: boolean;
 }
 
-// blockId → 백엔드 데이터 (연결된 블록만 채워진다)
-export interface BlockData {
-  notices?: Record<string, Notice[]>;
-  photos?: Record<string, Photo[]>;
-}
+export type { BlockData };
 
 export function renderBlock(id: string, block: Block, data: BlockData, ctx: BlockCtx): ReactNode {
   const connected = 'feature' in block ? block.feature.connected : false;
