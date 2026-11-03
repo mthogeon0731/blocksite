@@ -41,6 +41,30 @@ export function resolve(layout: Layout, movedId: string): Layout {
   return out;
 }
 
+export const sameLayout = (a: Layout, b: Layout) => {
+  const ids = Object.keys(a);
+  return ids.length === Object.keys(b).length && ids.every((id) => b[id] && a[id].x === b[id].x && a[id].y === b[id].y && a[id].w === b[id].w && a[id].h === b[id].h);
+};
+
+export type Dir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+// 6.2 손잡이로 크기 조절: 반대쪽 변은 그대로 두고, 판 안·최소 크기 이상으로. dx·dy는 끈 칸 수
+export function resizeRect(r: Rect, dir: Dir, dx: number, dy: number, type: BlockType): Rect {
+  const { min } = CATALOG[type];
+  let { x, y, w, h } = r;
+  if (dir.includes('e')) w = clamp(r.w + dx, min.w, COLS - r.x);
+  if (dir.includes('w')) {
+    x = clamp(r.x + dx, 0, r.x + r.w - min.w);
+    w = r.x + r.w - x;
+  }
+  if (dir.includes('s')) h = clamp(r.h + dy, min.h, MAX_ROWS - r.y);
+  if (dir.includes('n')) {
+    y = clamp(r.y + dy, 0, r.y + r.h - min.h);
+    h = r.y + r.h - y;
+  }
+  return { x, y, w, h };
+}
+
 // 판 안으로, 종류별 최소 크기 이상, 정수로
 export function clampRect(r: Rect, type: BlockType): Rect {
   const { min } = CATALOG[type];

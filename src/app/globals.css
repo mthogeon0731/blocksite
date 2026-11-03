@@ -32,6 +32,7 @@
   display: grid;
   grid-template-columns: repeat(48, var(--cell));
   grid-auto-rows: minmax(var(--cell), auto);
+  align-content: start; /* 판이 행보다 높아도(편집기 여유 줄) 행을 늘리지 않는다 */
   width: fit-content;
   margin-inline: auto;
   padding-bottom: var(--cell);
@@ -70,11 +71,29 @@
 }
 
 /* 편집기 장식 (편집기 쪽 스타일. 렌더러는 모른다) */
+.editor-stage .board {
+  cursor: crosshair; /* 빈 칸: 끌어서 자리 그리기 */
+}
 .editor-stage [data-block-id] {
-  cursor: pointer;
+  cursor: move;
 }
 .editor-stage [data-block-id]:hover {
   outline: 1px solid var(--color-neutral-300);
+}
+/* GRID_SPEC 5.3 모눈판: 판 전체(블록 뒤 빈 곳 포함)에 칸마다 옅은 선, 4칸마다 조금 진한 선.
+   바탕이 있는 블록은 가리고 plain 블록 아래로는 비친다. 판 높이는 편집기가 정한 줄 수(--rows)까지 늘린다 */
+.editor-stage[data-grid] .board {
+  min-height: calc(var(--rows) * 24px);
+  background-image:
+    linear-gradient(to right, rgb(0 0 0 / 0.13) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.13) 1px, transparent 1px),
+    linear-gradient(to right, rgb(0 0 0 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.06) 1px, transparent 1px);
+  background-size:
+    96px 96px,
+    96px 96px,
+    24px 24px,
+    24px 24px;
 }
 
 dialog::backdrop {

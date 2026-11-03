@@ -75,9 +75,9 @@ function RectForm({ id }: { id: string }) {
   const rect = useEditor((s) => s.config.layout[id]);
   const setRect = useEditor((s) => s.setRect);
   if (!rect) return null;
-  // 너비·높이를 바꿀 때는 위치를 지키고 판 끝까지만 늘린다
-  const set = (k: (typeof RECT_FIELDS)[number][0], v: number) =>
-    setRect(id, { ...rect, [k]: k === 'w' ? Math.min(v, COLS - rect.x) : k === 'h' ? Math.min(v, MAX_ROWS - rect.y) : v });
+  // 너비·높이를 바꿀 때는 위치를 지키고 판 끝까지만 늘린다. 입력칸 타이핑은 되돌리기에서 1초 단위로 묶는다
+  const set = (k: (typeof RECT_FIELDS)[number][0], v: number, group?: string) =>
+    setRect(id, { ...rect, [k]: k === 'w' ? Math.min(v, COLS - rect.x) : k === 'h' ? Math.min(v, MAX_ROWS - rect.y) : v }, group);
   return (
     <section>
       <h3 className="mb-2 text-xs font-medium text-neutral-600">위치·크기 (칸)</h3>
@@ -96,7 +96,7 @@ function RectForm({ id }: { id: string }) {
                 aria-label={label}
                 value={rect[k]}
                 onChange={(e) => {
-                  if (!Number.isNaN(e.target.valueAsNumber)) set(k, e.target.valueAsNumber);
+                  if (!Number.isNaN(e.target.valueAsNumber)) set(k, e.target.valueAsNumber, `type:${id}`);
                 }}
                 className="w-full min-w-0 border-x border-neutral-200 px-1 py-1 text-center text-sm focus:outline-none"
               />
