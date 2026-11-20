@@ -76,7 +76,7 @@ npm run dev
 
 **프로덕션 (그리드 개편, 2026-11-03 반영)**: https://blocksite-seven.vercel.app — 공개 페이지 `/s/kim-lab`, 편집기 `/editor/site_kimlab?key=<EDITOR_KEY>`. Vercel 프로젝트 `blocksite`(계정 hogeon), Supabase 모드. 다시 배포하려면 master에서 `npx vercel deploy --prod --yes`(Vercel CLI 로그인 필요). 환경변수는 Vercel 프로젝트의 Production·Preview에 들어 있다(`npx vercel env ls`). `.vercelignore`가 `legacy/`, `.data/`, `.env*`를 업로드에서 뺀다.
 - 반영 순서(완료): `grid-layout`을 master로 fast-forward → `npx vercel deploy --prod --yes` → 공개 페이지·API 읽기 확인 → Supabase 모드 check-rules 41건 통과(점검용 사이트만 씀, D는 읽기 전용) → 기존 사이트를 편집기로 한 번 열어 자동 높이 맞춤 → v2로 저장 → 1440px에서 모든 블록이 칸에 맞음.
-- **되돌리기 주의**: 이제 DB의 사이트가 v2로 저장되어 있어, 개편 전 코드(`e114207`)로 다시 배포하면 그 사이트가 열리지 않는다.
+- **되돌리기 주의**: 이제 DB의 사이트가 v2로 저장되어 있어, 개편 전 코드(`7beefe7`)로 다시 배포하면 그 사이트가 열리지 않는다.
 - 반영 전 확인용 preview: https://blocksite-7wr5s0tzp-hogeon.vercel.app (같은 코드·같은 DB, Vercel 로그인 필요. `npx vercel curl <주소>`로도 확인 가능).
 
 처음부터 새로 배포하는 경우(로컬 파일 저장소는 Vercel에서 쓸 수 없으므로 Supabase가 필요하다):
@@ -111,7 +111,7 @@ src/app/uploads/[...path] 로컬 업로드 파일 서빙 (Supabase 모드에서�
 scripts/check-rules.mjs   서버 검증 점검 42건
 scripts/grid.test.mjs     판 규칙·되돌리기 단위 확인 12건 (node --test)
 supabase/                 마이그레이션·시드 SQL (시드는 v2)
-legacy/                   교수님 홈페이지 정적 미리보기 (참고용, 빌드 제외)
+legacy/                   교수님 홈페이지 정적 미리보기 (참고용, 빌드·git 제외: 실제 사진·연락처라 로컬에만 둔다)
 ```
 
 ## 설계 규칙 (SPEC 3절 + GRID_SPEC 3절, 코드에서 지키는 곳)

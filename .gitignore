@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files: 값이 든 파일은 전부 제외, 빈 견본(.env.example)만 올린다
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -43,5 +44,5 @@ next-env.d.ts
 # local json store
 /.data/
 
-.vercel
-.env*
+# 교수님 홈페이지 미리보기(실제 연구실 사진·연락처): 로컬 참고용, 저장소 제외
+/legacy/
